@@ -210,6 +210,22 @@ def test_health_details_exposes_ocr_and_job_info(client: TestClient) -> None:
     assert "real_ocr_ready" in body["ocr"]
 
 
+def test_openapi_includes_health_and_recovery_contract(client: TestClient) -> None:
+    r = client.get("/openapi.json")
+    assert r.status_code == 200
+    body = r.json()
+    paths = body.get("paths", {})
+    assert "/health/details" in paths
+    assert "/recovery/clear-temp" in paths
+    assert "/recovery/retry-failed" in paths
+
+    schemas = body.get("components", {}).get("schemas", {})
+    assert "HealthDetailsResponse" in schemas
+    assert "OcrToolsStatus" in schemas
+    assert "ClearTempResponse" in schemas
+    assert "RetryFailedBatchResponse" in schemas
+
+
 def test_index_health_rebuild_and_optimize(client: TestClient) -> None:
     doc_id = client.app.state.db.upsert_pending("hash-index", "C:/in/a.pdf", "a.pdf")
     client.app.state.db.mark_done(
