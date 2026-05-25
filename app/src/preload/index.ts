@@ -50,8 +50,12 @@ const api: ElectronApi = {
       }),
     deleteDocument: (id) =>
       callSidecar<{ deleted: boolean }>({ method: "DELETE", path: `/documents/${id}` }),
-    search: (q, limit = 50) =>
-      callSidecar<SearchResponse>({ method: "GET", path: "/search", query: { q, limit } }),
+    search: (q, limit = 50, offset = 0) =>
+      callSidecar<SearchResponse>({
+        method: "GET",
+        path: "/search",
+        query: { q, limit, offset },
+      }),
     getSettings: () => callSidecar<SettingsModel>({ method: "GET", path: "/settings" }),
     putSettings: (s) =>
       callSidecar<SettingsModel>({ method: "PUT", path: "/settings", body: s }),

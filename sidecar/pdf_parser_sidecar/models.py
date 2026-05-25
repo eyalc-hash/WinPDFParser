@@ -56,6 +56,9 @@ class SearchHit(BaseModel):
 
 class SearchResponse(BaseModel):
     query: str
+    total: int
+    limit: int
+    offset: int
     hits: list[SearchHit]
 
 

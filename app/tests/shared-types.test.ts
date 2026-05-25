@@ -56,4 +56,15 @@ describe("shared types contract", () => {
     };
     expect(h.snippet).toContain("[[");
   });
+
+  it("SearchResponse exposes paging metadata", () => {
+    const res: import("../src/shared/types").SearchResponse = {
+      query: "invoice",
+      total: 8,
+      limit: 25,
+      offset: 0,
+      hits: [],
+    };
+    expect(res.total).toBeGreaterThanOrEqual(res.hits.length);
+  });
 });
