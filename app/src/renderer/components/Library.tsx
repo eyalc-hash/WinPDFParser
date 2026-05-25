@@ -28,6 +28,7 @@ const sortOptions: Array<{ label: string; value: DocumentSort }> = [
 
 export function Library({ refreshKey }: Props): JSX.Element {
   const [docs, setDocs] = useState<DocumentRow[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [pageSize] = useState(PAGE_SIZE);
@@ -54,6 +55,13 @@ export function Library({ refreshKey }: Props): JSX.Element {
         });
         if (cancelled) return;
         setDocs(list.items);
+        setSelectedIds((current) => {
+          const next = new Set<number>();
+          for (const id of current) {
+            if (list.items.some((item) => item.id === id)) next.add(id);
+          }
+          return next;
+        });
         setTotal(list.total);
         setError(null);
       } catch (err) {
@@ -86,6 +94,8 @@ export function Library({ refreshKey }: Props): JSX.Element {
   const showFilteredEmpty = !loading && docs.length === 0 && filterActive;
   const showLibraryEmpty = !loading && docs.length === 0 && !filterActive && total === 0;
   const pageSummary = `Showing ${showingFrom}–${showingTo} of ${total}`;
+  const selectedDocs = docs.filter((doc) => selectedIds.has(doc.id));
+  const hasSelection = selectedDocs.length > 0;
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -166,6 +176,13 @@ export function Library({ refreshKey }: Props): JSX.Element {
           </div>
         </div>
       </div>
+      {hasSelection ? (
+        <BulkActions
+          selected={selectedDocs}
+          onClear={() => setSelectedIds(new Set())}
+          onChanged={reloadCurrentPage}
+        />
+      ) : null}
 
       {error ? <p className="mb-2 text-sm text-destructive">{error}</p> : null}
       {loading && docs.length === 0 ? (
@@ -178,6 +195,17 @@ export function Library({ refreshKey }: Props): JSX.Element {
           <caption className="sr-only">Indexed documents table</caption>
           <thead className="text-xs uppercase text-muted-foreground">
             <tr className="border-b border-border">
+              <th scope="col" className="w-10 px-2 py-2 text-left">
+                <input
+                  type="checkbox"
+                  aria-label="Select all documents on page"
+                  checked={docs.length > 0 && selectedIds.size === docs.length}
+                  onChange={(event) => {
+                    if (event.target.checked) setSelectedIds(new Set(docs.map((d) => d.id)));
+                    else setSelectedIds(new Set());
+                  }}
+                />
+              </th>
               <th scope="col" className="w-1/3 px-2 py-2 text-left">Original</th>
               <th scope="col" className="w-1/3 px-2 py-2 text-left">AI name</th>
               <th scope="col" className="w-16 px-2 py-2 text-left">Pages</th>
@@ -188,7 +216,20 @@ export function Library({ refreshKey }: Props): JSX.Element {
           </thead>
           <tbody>
             {docs.map((d) => (
-              <Row key={d.id} doc={d} onChanged={reloadCurrentPage} />
+              <Row
+                key={d.id}
+                doc={d}
+                selected={selectedIds.has(d.id)}
+                onToggleSelected={(checked) => {
+                  setSelectedIds((current) => {
+                    const next = new Set(current);
+                    if (checked) next.add(d.id);
+                    else next.delete(d.id);
+                    return next;
+                  });
+                }}
+                onChanged={reloadCurrentPage}
+              />
             ))}
           </tbody>
         </table>
@@ -215,7 +256,17 @@ function EmptyState(): JSX.Element {
   );
 }
 
-function Row({ doc, onChanged }: { doc: DocumentRow; onChanged: () => void }): JSX.Element {
+function Row({
+  doc,
+  selected,
+  onToggleSelected,
+  onChanged,
+}: {
+  doc: DocumentRow;
+  selected: boolean;
+  onToggleSelected: (checked: boolean) => void;
+  onChanged: () => void;
+}): JSX.Element {
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
   const failureMessage = doc.status === "failed" ? doc.error?.trim() : "";
@@ -241,6 +292,14 @@ function Row({ doc, onChanged }: { doc: DocumentRow; onChanged: () => void }): J
   return (
     <>
       <tr className="border-b border-border/50 hover:bg-muted/30">
+        <td className="px-2 py-2">
+          <input
+            type="checkbox"
+            checked={selected}
+            aria-label={`Select ${doc.original_name}`}
+            onChange={(event) => onToggleSelected(event.target.checked)}
+          />
+        </td>
         <td className="truncate px-2 py-2" title={doc.original_path}>
           {doc.original_name}
         </td>
@@ -257,7 +316,7 @@ function Row({ doc, onChanged }: { doc: DocumentRow; onChanged: () => void }): J
         <td className="px-2 py-2 text-right">
           <div className="inline-flex gap-1">
             {doc.status === "failed" ? (
-              <Button variant="ghost" disabled={retrying} onClick={retry}>
+              <Button variant="ghost" disabled={retrying || !doc.retryable} onClick={retry}>
                 {retrying ? "Retrying…" : "Retry"}
               </Button>
             ) : null}
@@ -289,13 +348,77 @@ function Row({ doc, onChanged }: { doc: DocumentRow; onChanged: () => void }): J
       </tr>
       {truncatedFailure || retryError ? (
         <tr className="border-b border-border/50">
-          <td colSpan={6} className="px-2 pb-2 text-xs text-destructive">
-            {truncatedFailure ? <span title={failureMessage}>Failure: {truncatedFailure}</span> : null}
+          <td colSpan={7} className="px-2 pb-2 text-xs text-destructive">
+            {truncatedFailure ? (
+              <span title={failureMessage}>
+                Failure{doc.error_category ? ` (${doc.error_category})` : ""}: {truncatedFailure}
+              </span>
+            ) : null}
             {retryError ? <span className="ml-2">Retry failed: {retryError}</span> : null}
           </td>
         </tr>
       ) : null}
     </>
+  );
+}
+
+function BulkActions({
+  selected,
+  onClear,
+  onChanged,
+}: {
+  selected: DocumentRow[];
+  onClear: () => void;
+  onChanged: () => void;
+}): JSX.Element {
+  const [busy, setBusy] = useState(false);
+  const selectedWithOutput = selected.filter((doc) => doc.output_path);
+  const failedRetryable = selected.filter((doc) => doc.status === "failed" && doc.retryable);
+
+  const run = async (fn: (doc: DocumentRow) => Promise<void>): Promise<void> => {
+    setBusy(true);
+    try {
+      for (const doc of selected) {
+        await fn(doc);
+      }
+      onChanged();
+      onClear();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-card/40 p-2 text-xs">
+      <span className="text-muted-foreground">{selected.length} selected</span>
+      <Button variant="ghost" disabled={busy || failedRetryable.length === 0} onClick={() => void run(async (doc) => {
+        if (doc.status === "failed" && doc.retryable) await window.api.sidecar.retryDocument(doc.id);
+      })}>
+        Retry failed
+      </Button>
+      <Button variant="ghost" disabled={busy || selectedWithOutput.length === 0} onClick={() => {
+        for (const doc of selectedWithOutput) {
+          if (doc.output_path) void window.api.openPath(doc.output_path);
+        }
+      }}>
+        Open all
+      </Button>
+      <Button variant="ghost" disabled={busy || selectedWithOutput.length === 0} onClick={() => {
+        for (const doc of selectedWithOutput) {
+          if (doc.output_path) void window.api.revealInFolder(doc.output_path);
+        }
+      }}>
+        Reveal all
+      </Button>
+      <Button variant="destructive" disabled={busy} onClick={() => void run(async (doc) => {
+        await window.api.sidecar.deleteDocument(doc.id);
+      })}>
+        Remove selected
+      </Button>
+      <Button variant="ghost" disabled={busy} onClick={onClear}>
+        Clear
+      </Button>
+    </div>
   );
 }
 

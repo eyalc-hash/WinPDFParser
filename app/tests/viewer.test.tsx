@@ -13,6 +13,10 @@ const hit: SearchHit = {
   output_path: "C:/docs/invoice.pdf",
   snippet: "[[invoice]]",
   score: 1,
+  processed_at: null,
+  title: null,
+  author: null,
+  source_created_at: null,
 };
 
 const viewerApi = {
@@ -28,6 +32,7 @@ beforeEach(() => {
     openPath: vi.fn(),
     revealInFolder: vi.fn(),
     openAppDataFolder: vi.fn(),
+    exportDiagnostics: vi.fn(),
     viewer: viewerApi,
     sidecar: {
       health: vi.fn(),
@@ -43,6 +48,9 @@ beforeEach(() => {
       getSettings: vi.fn(),
       putSettings: vi.fn(),
       ollamaStatus: vi.fn(),
+      getIndexHealth: vi.fn(),
+      rebuildIndex: vi.fn(),
+      optimizeIndex: vi.fn(),
     },
   } as unknown as ElectronApi;
 });

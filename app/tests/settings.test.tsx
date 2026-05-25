@@ -34,6 +34,7 @@ beforeEach(() => {
     openPath: vi.fn(),
     revealInFolder: vi.fn(),
     openAppDataFolder: vi.fn(),
+    exportDiagnostics: vi.fn().mockResolvedValue("C:/diag.json"),
     viewer: {
       loadPdf: vi.fn(),
       clear: vi.fn(),
@@ -52,6 +53,15 @@ beforeEach(() => {
       getSettings: vi.fn().mockResolvedValue(settings),
       putSettings: vi.fn().mockResolvedValue(settings),
       ollamaStatus: vi.fn().mockResolvedValue({ available: true, url: settings.ollama_url }),
+      getIndexHealth: vi.fn().mockResolvedValue({
+        documents_total: 2,
+        indexed_total: 2,
+        done_total: 2,
+        missing_in_fts: 0,
+        orphaned_fts_rows: 0,
+      }),
+      rebuildIndex: vi.fn().mockResolvedValue({ rebuilt_rows: 2 }),
+      optimizeIndex: vi.fn().mockResolvedValue({ optimized: true }),
     },
   } as unknown as ElectronApi;
 });
@@ -92,6 +102,12 @@ function makeFailures(): DocumentRow[] {
       processed_at: "2024-01-02T00:00:00Z",
       status: "failed",
       error: "OCR failed on page 1",
+      error_category: "unknown",
+      retryable: true,
+      retry_count: 0,
+      title: null,
+      author: null,
+      source_created_at: null,
     },
     {
       id: 10,
@@ -104,6 +120,12 @@ function makeFailures(): DocumentRow[] {
       processed_at: "2024-01-01T00:00:00Z",
       status: "failed",
       error: "Rename failed",
+      error_category: "unknown",
+      retryable: true,
+      retry_count: 0,
+      title: null,
+      author: null,
+      source_created_at: null,
     },
   ];
 }

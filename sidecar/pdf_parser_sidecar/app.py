@@ -35,11 +35,15 @@ from .models import (
     DocumentSort,
     DocumentStatus,
     HealthResponse,
+    IndexHealthResponse,
+    IndexRebuildResponse,
     JobList,
     JobProgress,
+    MaintenanceResponse,
     ProcessAccepted,
     ProcessRequest,
     RetryAccepted,
+    SearchRank,
     SearchResponse,
     SettingsModel,
 )
@@ -141,7 +145,11 @@ def create_app(config: Config) -> FastAPI:
             raise HTTPException(status_code=404, detail="document not found") from exc
         except ValueError as exc:
             detail = str(exc)
-            if detail != "no output folder configured, run a batch first":
+            if detail not in {
+                "no output folder configured, run a batch first",
+                "document is marked as non-retryable",
+                "retry limit reached for this document",
+            }:
                 detail = "configured output folder is invalid"
             raise HTTPException(status_code=409, detail=detail) from exc
         return RetryAccepted(job_id=job_id)
@@ -158,13 +166,27 @@ def create_app(config: Config) -> FastAPI:
         q: str = Query(..., min_length=1),
         limit: int = Query(50, ge=1, le=200),
         offset: int = Query(0, ge=0),
+        status: DocumentStatus | None = None,
+        name: str | None = Query(None, min_length=1),
+        processed_after: str | None = None,
+        processed_before: str | None = None,
+        rank: SearchRank = "relevance",
     ) -> SearchResponse:
         try:
-            hits, total = db.search(q, limit=limit, offset=offset)
+            hits, total = db.search(
+                q,
+                limit=limit,
+                offset=offset,
+                status=status,
+                name=name,
+                processed_after=processed_after,
+                processed_before=processed_before,
+                rank=rank,
+            )
         except Exception as exc:  # noqa: BLE001
             # Bad FTS5 syntax shouldn't 500 the UI.
             raise HTTPException(status_code=400, detail=f"bad query: {exc}") from exc
-        return SearchResponse(query=q, total=total, limit=limit, offset=offset, hits=hits)
+        return SearchResponse(query=q, total=total, limit=limit, offset=offset, hits=hits, rank=rank)
 
     # ---- settings ---------------------------------------------------------
 
@@ -197,6 +219,22 @@ def create_app(config: Config) -> FastAPI:
     @app.get("/ollama/status")
     async def ollama_status() -> dict[str, object]:
         return {"available": ollama.is_available(), "url": config.ollama_url}
+
+    # ---- index / maintenance -----------------------------------------------
+
+    @app.get("/index/health", response_model=IndexHealthResponse)
+    async def index_health() -> IndexHealthResponse:
+        return IndexHealthResponse(**db.index_health())
+
+    @app.post("/index/rebuild", response_model=IndexRebuildResponse)
+    async def index_rebuild() -> IndexRebuildResponse:
+        rebuilt_rows = db.rebuild_index()
+        return IndexRebuildResponse(rebuilt_rows=rebuilt_rows)
+
+    @app.post("/maintenance/optimize", response_model=MaintenanceResponse)
+    async def maintenance_optimize() -> MaintenanceResponse:
+        db.optimize()
+        return MaintenanceResponse(optimized=True)
 
     # ---- fallback error handler -------------------------------------------
 

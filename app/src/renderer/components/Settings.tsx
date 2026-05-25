@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { DocumentRow, OllamaStatus, SettingsModel } from "@shared/types";
+import type { DocumentRow, IndexHealth, OllamaStatus, SettingsModel } from "@shared/types";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 
@@ -11,6 +11,9 @@ export function SettingsDrawer({ onClose }: Props): JSX.Element {
   const [settings, setSettings] = useState<SettingsModel | null>(null);
   const [ollama, setOllama] = useState<OllamaStatus | null>(null);
   const [failures, setFailures] = useState<DocumentRow[]>([]);
+  const [indexHealth, setIndexHealth] = useState<IndexHealth | null>(null);
+  const [maintenanceBusy, setMaintenanceBusy] = useState(false);
+  const [diagnosticsPath, setDiagnosticsPath] = useState<string | null>(null);
   const [failuresLoading, setFailuresLoading] = useState(false);
   const [retryingId, setRetryingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,6 +36,7 @@ export function SettingsDrawer({ onClose }: Props): JSX.Element {
       window.api.sidecar.getSettings().then(setSettings).catch((e) => setError((e as Error).message)),
       window.api.sidecar.ollamaStatus().then(setOllama).catch(() => setOllama(null)),
       loadFailures(),
+      window.api.sidecar.getIndexHealth().then(setIndexHealth).catch(() => setIndexHealth(null)),
     ]);
   }, [loadFailures]);
 
@@ -159,6 +163,81 @@ export function SettingsDrawer({ onClose }: Props): JSX.Element {
               onRetry={retryFailure}
             />
 
+            <section className="border-t border-border pt-3">
+              <h3 className="mb-2 text-sm font-semibold">Index maintenance</h3>
+              {indexHealth ? (
+                <p className="mb-2 text-xs text-muted-foreground">
+                  done: {indexHealth.done_total}, indexed: {indexHealth.indexed_total}, missing:{" "}
+                  {indexHealth.missing_in_fts}, orphaned: {indexHealth.orphaned_fts_rows}
+                </p>
+              ) : (
+                <p className="mb-2 text-xs text-muted-foreground">Index health unavailable.</p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="ghost"
+                  disabled={maintenanceBusy}
+                  onClick={async () => {
+                    setMaintenanceBusy(true);
+                    setError(null);
+                    try {
+                      await window.api.sidecar.rebuildIndex();
+                      setIndexHealth(await window.api.sidecar.getIndexHealth());
+                    } catch (err) {
+                      setError((err as Error).message);
+                    } finally {
+                      setMaintenanceBusy(false);
+                    }
+                  }}
+                >
+                  Rebuild index
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={maintenanceBusy}
+                  onClick={async () => {
+                    setMaintenanceBusy(true);
+                    setError(null);
+                    try {
+                      await window.api.sidecar.optimizeIndex();
+                      setIndexHealth(await window.api.sidecar.getIndexHealth());
+                    } catch (err) {
+                      setError((err as Error).message);
+                    } finally {
+                      setMaintenanceBusy(false);
+                    }
+                  }}
+                >
+                  Optimize index
+                </Button>
+              </div>
+            </section>
+
+            <section className="border-t border-border pt-3">
+              <h3 className="mb-2 text-sm font-semibold">Diagnostics</h3>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  onClick={async () => {
+                    setError(null);
+                    try {
+                      const path = await window.api.exportDiagnostics();
+                      setDiagnosticsPath(path);
+                    } catch (err) {
+                      setError((err as Error).message);
+                    }
+                  }}
+                >
+                  Export diagnostics bundle
+                </Button>
+              </div>
+              {diagnosticsPath ? (
+                <p className="mt-1 text-xs text-muted-foreground" title={diagnosticsPath}>
+                  Saved: {diagnosticsPath}
+                </p>
+              ) : null}
+            </section>
+
             <div className="border-t border-border pt-3">
               <Button variant="ghost" onClick={() => window.api.openAppDataFolder()}>
                 Open app data folder
@@ -236,7 +315,7 @@ function RecentFailures({
                   </div>
                   <Button
                     variant="ghost"
-                    disabled={retryingId === failure.id}
+                    disabled={retryingId === failure.id || !failure.retryable}
                     onClick={() => void onRetry(failure.id)}
                   >
                     {retryingId === failure.id ? "Retrying…" : "Retry"}
@@ -244,6 +323,7 @@ function RecentFailures({
                 </div>
                 {truncated ? (
                   <p className="mt-1 truncate text-destructive" title={message}>
+                    {failure.error_category ? `[${failure.error_category}] ` : ""}
                     {truncated}
                   </p>
                 ) : null}

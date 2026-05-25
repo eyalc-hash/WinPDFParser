@@ -182,7 +182,41 @@ def test_retry_done_document_returns_conflict(client: TestClient) -> None:
     assert r.status_code == 409
 
 
+def test_retry_non_retryable_document_returns_conflict(client: TestClient) -> None:
+    doc_id = client.app.state.db.upsert_pending("hash-non-retry", "C:/in/a.pdf", "a.pdf")
+    client.app.state.db.mark_failed(doc_id, "missing dependency", category="ocr_missing_dependency", retryable=False)
+
+    r = client.post(f"/documents/{doc_id}/retry")
+
+    assert r.status_code == 409
+    assert "non-retryable" in r.json()["detail"]
+
+
 def test_ollama_status_does_not_explode(client: TestClient) -> None:
     r = client.get("/ollama/status")
     assert r.status_code == 200
     assert "available" in r.json()
+
+
+def test_index_health_rebuild_and_optimize(client: TestClient) -> None:
+    doc_id = client.app.state.db.upsert_pending("hash-index", "C:/in/a.pdf", "a.pdf")
+    client.app.state.db.mark_done(
+        doc_id,
+        output_path="C:/out/a.pdf",
+        ai_name="Alpha",
+        page_count=2,
+        text="alpha",
+    )
+
+    health = client.get("/index/health")
+    assert health.status_code == 200
+    assert health.json()["done_total"] == 1
+    assert "missing_in_fts" in health.json()
+
+    rebuild = client.post("/index/rebuild")
+    assert rebuild.status_code == 200
+    assert rebuild.json()["rebuilt_rows"] >= 1
+
+    optimize = client.post("/maintenance/optimize")
+    assert optimize.status_code == 200
+    assert optimize.json()["optimized"] is True

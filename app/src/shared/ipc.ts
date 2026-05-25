@@ -4,6 +4,7 @@ export const IPC = {
   OpenPath: "shell:open-path",
   RevealInFolder: "shell:reveal",
   OpenAppData: "shell:open-app-data",
+  ExportDiagnostics: "app:export-diagnostics",
   Sidecar: "sidecar:request",
   ViewerLoadPdf: "viewer:load-pdf",
   ViewerClear: "viewer:clear",

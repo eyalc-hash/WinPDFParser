@@ -4,6 +4,8 @@
  * through this thin proxy.
  */
 import { stat } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { BrowserWindow, dialog, ipcMain, shell, app, protocol, net } from "electron";
@@ -68,11 +70,63 @@ export function registerIpcHandlers(sidecar: SidecarManager): void {
     await shell.openPath(app.getPath("userData"));
   });
 
+  ipcMain.handle(IPC.ExportDiagnostics, async () => {
+    const filePath = await exportDiagnostics(sidecar);
+    return filePath;
+  });
+
   ipcMain.handle(IPC.ViewerLoadPdf, async (_e, rawPath: string): Promise<string | null> => {
     const safePath = await validateViewerPdfPath(sidecar, rawPath);
     if (!safePath) {
       currentViewerPdfPath = null;
       return null;
+    }
+
+    async function exportDiagnostics(sidecar: SidecarManager): Promise<string> {
+      const userData = app.getPath("userData");
+      const logsDir = path.join(userData, "logs");
+      await mkdir(logsDir, { recursive: true });
+      const now = new Date().toISOString().replace(/[:.]/g, "-");
+      const outPath = path.join(logsDir, `diagnostics-${now}.json`);
+
+      let sidecarHealth: SidecarResponse | null = null;
+      try {
+        sidecarHealth = await proxyToSidecar(sidecar, { method: "GET", path: "/health" });
+      } catch {
+        sidecarHealth = null;
+      }
+
+      const lastLogPath = path.join(logsDir, "sidecar.log");
+      let tailLog: string | null = null;
+      try {
+        const content = await readFile(lastLogPath, "utf8");
+        tailLog = content.split("\n").slice(-200).join("\n");
+      } catch {
+        tailLog = null;
+      }
+
+      const payload = {
+        generated_at: new Date().toISOString(),
+        platform: process.platform,
+        arch: process.arch,
+        os_release: os.release(),
+        app_version: app.getVersion(),
+        electron_version: process.versions.electron,
+        chrome_version: process.versions.chrome,
+        node_version: process.version,
+        user_data: userData,
+        sidecar_base_url: (() => {
+          try {
+            return sidecar.baseUrl;
+          } catch {
+            return null;
+          }
+        })(),
+        sidecar_health: sidecarHealth,
+        sidecar_log_tail: tailLog,
+      };
+      await writeFile(outPath, JSON.stringify(payload, null, 2), "utf8");
+      return outPath;
     }
     currentViewerPdfPath = safePath;
     return `${VIEWER_URL_BASE}?v=${Date.now()}`;

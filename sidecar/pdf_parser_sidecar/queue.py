@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import subprocess
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -121,6 +122,10 @@ class JobManager:
         document = self.db.get_document(document_id)
         if document is None:
             raise FileNotFoundError("document not found")
+        if not document.retryable:
+            raise ValueError("document is marked as non-retryable")
+        if document.retry_count >= 3:
+            raise ValueError("retry limit reached for this document")
         output_folder = self.db.get_setting("output_folder")
         if not output_folder:
             raise ValueError("no output folder configured, run a batch first")
@@ -239,6 +244,7 @@ class JobManager:
         existing = self.db.get_by_hash(content_hash)
         if existing and existing.status == "done" and not state.force:
             state.progress.skipped += 1
+            self.db.mark_skipped(existing.id)
             return
 
         document_id = self.db.upsert_pending(content_hash, str(pdf), pdf.name)
@@ -278,10 +284,14 @@ class JobManager:
                 ai_name=final_stem,
                 page_count=ocr_result.page_count,
                 text=ocr_result.text,
+                title=ocr_result.title,
+                author=ocr_result.author,
+                source_created_at=ocr_result.source_created_at,
             )
             state.progress.processed += 1
         except Exception as exc:  # noqa: BLE001
-            self.db.mark_failed(document_id, repr(exc))
+            category, retryable = _classify_failure(exc)
+            self.db.mark_failed(document_id, repr(exc), category=category, retryable=retryable)
             raise
 
     def _apply_runtime_concurrency_limit(self, requested: int) -> None:
@@ -298,3 +308,20 @@ def reconcile_on_startup(db: Database) -> int:
 
 
 __all__ = ["JobManager", "reconcile_on_startup"]
+
+
+def _classify_failure(exc: Exception) -> tuple[str, bool]:
+    text = f"{type(exc).__name__}: {exc}".lower()
+    if isinstance(exc, (FileNotFoundError, subprocess.SubprocessError)) and (
+        "tesseract" in text or "ghostscript" in text or "ocrmypdf" in text
+    ):
+        return "ocr_missing_dependency", False
+    if isinstance(exc, PermissionError):
+        return "file_locked", True
+    if "pdf" in text and ("parse" in text or "invalid" in text):
+        return "pdf_parse_error", False
+    if "ollama" in text or "httpx" in text or "connection refused" in text or "timed out" in text:
+        return "model_unavailable", True
+    if isinstance(exc, OSError):
+        return "filesystem_error", True
+    return "unknown", True

@@ -9,6 +9,15 @@ from pydantic import BaseModel, Field
 
 DocumentStatus = Literal["pending", "processing", "done", "failed", "skipped"]
 DocumentSort = Literal["processed_desc", "processed_asc", "name_asc", "pages_desc"]
+SearchRank = Literal["relevance", "recent"]
+FailureCategory = Literal[
+    "ocr_missing_dependency",
+    "file_locked",
+    "pdf_parse_error",
+    "model_unavailable",
+    "filesystem_error",
+    "unknown",
+]
 
 
 class HealthResponse(BaseModel):
@@ -43,6 +52,12 @@ class DocumentRow(BaseModel):
     processed_at: datetime | None
     status: DocumentStatus
     error: str | None = None
+    error_category: FailureCategory | None = None
+    retryable: bool = True
+    retry_count: int = 0
+    title: str | None = None
+    author: str | None = None
+    source_created_at: datetime | None = None
 
 
 class DocumentList(BaseModel):
@@ -57,6 +72,10 @@ class SearchHit(BaseModel):
     output_path: str | None
     snippet: str
     score: float
+    processed_at: datetime | None = None
+    title: str | None = None
+    author: str | None = None
+    source_created_at: datetime | None = None
 
 
 class SearchResponse(BaseModel):
@@ -65,6 +84,7 @@ class SearchResponse(BaseModel):
     limit: int
     offset: int
     hits: list[SearchHit]
+    rank: SearchRank = "relevance"
 
 
 class JobProgress(BaseModel):
@@ -97,3 +117,19 @@ class SettingsModel(BaseModel):
 class ErrorResponse(BaseModel):
     error: str
     detail: str | None = Field(default=None)
+
+
+class IndexHealthResponse(BaseModel):
+    documents_total: int
+    indexed_total: int
+    done_total: int
+    missing_in_fts: int
+    orphaned_fts_rows: int
+
+
+class IndexRebuildResponse(BaseModel):
+    rebuilt_rows: int
+
+
+class MaintenanceResponse(BaseModel):
+    optimized: bool

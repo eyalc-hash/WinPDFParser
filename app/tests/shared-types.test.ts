@@ -55,8 +55,34 @@ describe("shared types contract", () => {
       output_path: null,
       snippet: "…invoice [[number]] 42…",
       score: 1.0,
+      processed_at: null,
+      title: null,
+      author: null,
+      source_created_at: null,
     };
     expect(h.snippet).toContain("[[");
+  });
+
+  it("DocumentRow carries failure and metadata fields", () => {
+    const row: DocumentRow = {
+      id: 1,
+      content_hash: "h",
+      original_path: "C:/in/a.pdf",
+      output_path: null,
+      original_name: "a.pdf",
+      ai_name: null,
+      page_count: null,
+      processed_at: null,
+      status: "failed",
+      error: "boom",
+      error_category: "unknown",
+      retryable: true,
+      retry_count: 1,
+      title: null,
+      author: null,
+      source_created_at: null,
+    };
+    expect(row.retry_count).toBe(1);
   });
 
   it("SearchResponse exposes paging metadata", () => {
@@ -66,6 +92,7 @@ describe("shared types contract", () => {
       limit: 25,
       offset: 0,
       hits: [],
+      rank: "relevance",
     };
     expect(res.total).toBeGreaterThanOrEqual(res.hits.length);
   });
