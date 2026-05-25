@@ -47,6 +47,8 @@ jobs:
 
       - name: Build Windows installer with electron-builder
         working-directory: app
+        env:
+          npm_config_workspaces: "false"
         run: npm run dist
 
       - name: Upload installer artifact
