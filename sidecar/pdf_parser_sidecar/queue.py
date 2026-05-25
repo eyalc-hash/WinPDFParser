@@ -26,6 +26,7 @@ class _JobState:
     files: list[Path]
     force: bool
     rename_with_llm: bool
+    ocr_language: str
     output_folder: Path
     model: str
     progress: JobProgress
@@ -79,7 +80,8 @@ class JobManager:
         self.db = db
         self.ollama = ollama
         self._jobs: dict[str, _JobState] = {}
-        self._semaphore = asyncio.Semaphore(max(1, config.max_concurrent_jobs))
+        self._max_concurrent_jobs = max(1, config.max_concurrent_jobs)
+        self._semaphore = asyncio.Semaphore(self._max_concurrent_jobs)
         self._lock = asyncio.Lock()
 
     # -- public API ---------------------------------------------------------
@@ -91,6 +93,8 @@ class JobManager:
         output_folder: Path,
         force: bool,
         rename_with_llm: bool,
+        ocr_language: str,
+        max_concurrent_jobs: int,
         model: str,
     ) -> tuple[str, int]:
         safe_input = _validate_user_folder(input_folder, kind="input")
@@ -100,6 +104,8 @@ class JobManager:
             output_folder=output_folder,
             force=force,
             rename_with_llm=rename_with_llm,
+            ocr_language=ocr_language,
+            max_concurrent_jobs=max_concurrent_jobs,
             model=model,
         )
 
@@ -108,6 +114,8 @@ class JobManager:
         *,
         document_id: int,
         rename_with_llm: bool,
+        ocr_language: str,
+        max_concurrent_jobs: int,
         model: str,
     ) -> str:
         document = self.db.get_document(document_id)
@@ -122,6 +130,8 @@ class JobManager:
             output_folder=Path(output_folder),
             force=True,
             rename_with_llm=rename_with_llm,
+            ocr_language=ocr_language,
+            max_concurrent_jobs=max_concurrent_jobs,
             model=model,
         )
         return job_id
@@ -165,10 +175,13 @@ class JobManager:
         output_folder: Path,
         force: bool,
         rename_with_llm: bool,
+        ocr_language: str,
+        max_concurrent_jobs: int,
         model: str,
     ) -> tuple[str, int]:
         safe_output = _validate_user_folder(output_folder, kind="output")
         safe_output.mkdir(parents=True, exist_ok=True)
+        self._apply_runtime_concurrency_limit(max_concurrent_jobs)
         job_id = uuid.uuid4().hex
         progress = JobProgress(
             job_id=job_id,
@@ -184,6 +197,7 @@ class JobManager:
             files=files,
             force=force,
             rename_with_llm=rename_with_llm,
+            ocr_language=ocr_language,
             output_folder=safe_output,
             model=model,
             progress=progress,
@@ -232,7 +246,7 @@ class JobManager:
         try:
             # Use a temp output name first so a crash doesn't leak a final-named file.
             temp_out = state.output_folder / f"ocr_{content_hash[:12]}.pdf.tmp"
-            ocr_result = run_ocr(pdf, temp_out)
+            ocr_result = run_ocr(pdf, temp_out, language=state.ocr_language)
 
             stem_seed = pdf.stem
             if state.rename_with_llm:
@@ -269,6 +283,13 @@ class JobManager:
         except Exception as exc:  # noqa: BLE001
             self.db.mark_failed(document_id, repr(exc))
             raise
+
+    def _apply_runtime_concurrency_limit(self, requested: int) -> None:
+        safe = max(1, min(4, int(requested)))
+        if safe == self._max_concurrent_jobs:
+            return
+        self._max_concurrent_jobs = safe
+        self._semaphore = asyncio.Semaphore(safe)
 
 
 def reconcile_on_startup(db: Database) -> int:

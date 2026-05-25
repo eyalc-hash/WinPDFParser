@@ -85,6 +85,25 @@ export function Library({ refreshKey }: Props): JSX.Element {
   const canGoForward = offset + docs.length < total && !loading;
   const showFilteredEmpty = !loading && docs.length === 0 && filterActive;
   const showLibraryEmpty = !loading && docs.length === 0 && !filterActive && total === 0;
+  const pageSummary = `Showing ${showingFrom}–${showingTo} of ${total}`;
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const target = event.target as HTMLElement | null;
+      if (target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "")) {
+        return;
+      }
+      if ((event.key === "ArrowLeft" || event.key.toLowerCase() === "p") && canGoBack) {
+        event.preventDefault();
+        setOffset((current) => Math.max(current - pageSize, 0));
+      } else if ((event.key === "ArrowRight" || event.key.toLowerCase() === "n") && canGoForward) {
+        event.preventDefault();
+        setOffset((current) => current + pageSize);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [canGoBack, canGoForward, pageSize]);
 
   return (
     <div className="h-full overflow-auto px-4 py-3">
@@ -93,6 +112,7 @@ export function Library({ refreshKey }: Props): JSX.Element {
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             Status
             <select
+              aria-label="Filter documents by status"
               className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
               value={status}
               onChange={(e) => {
@@ -110,6 +130,7 @@ export function Library({ refreshKey }: Props): JSX.Element {
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             Sort
             <select
+              aria-label="Sort documents"
               className="h-9 rounded-md border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
               value={sort}
               onChange={(e) => {
@@ -126,7 +147,7 @@ export function Library({ refreshKey }: Props): JSX.Element {
           </label>
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          <span>Showing {showingFrom}–{showingTo} of {total}</span>
+          <span role="status" aria-live="polite">{pageSummary}</span>
           <div className="flex gap-2">
             <Button
               variant="ghost"
@@ -154,14 +175,15 @@ export function Library({ refreshKey }: Props): JSX.Element {
       {showLibraryEmpty ? <EmptyState /> : null}
       {docs.length > 0 ? (
         <table className="w-full table-fixed text-sm">
+          <caption className="sr-only">Indexed documents table</caption>
           <thead className="text-xs uppercase text-muted-foreground">
             <tr className="border-b border-border">
-              <th className="w-1/3 px-2 py-2 text-left">Original</th>
-              <th className="w-1/3 px-2 py-2 text-left">AI name</th>
-              <th className="w-16 px-2 py-2 text-left">Pages</th>
-              <th className="w-24 px-2 py-2 text-left">Status</th>
-              <th className="w-40 px-2 py-2 text-left">Processed</th>
-              <th className="w-40 px-2 py-2 text-right">Actions</th>
+              <th scope="col" className="w-1/3 px-2 py-2 text-left">Original</th>
+              <th scope="col" className="w-1/3 px-2 py-2 text-left">AI name</th>
+              <th scope="col" className="w-16 px-2 py-2 text-left">Pages</th>
+              <th scope="col" className="w-24 px-2 py-2 text-left">Status</th>
+              <th scope="col" className="w-40 px-2 py-2 text-left">Processed</th>
+              <th scope="col" className="w-40 px-2 py-2 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>

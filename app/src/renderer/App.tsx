@@ -11,13 +11,31 @@ export function App(): JSX.Element {
   const [tab, setTab] = useState<Tab>("library");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [version, setVersion] = useState<string | null>(null);
+  const [sidecarOnline, setSidecarOnline] = useState<boolean | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    window.api.sidecar
-      .health()
-      .then((h) => setVersion(h.version))
-      .catch(() => setVersion(null));
+    let cancelled = false;
+    const check = async (): Promise<void> => {
+      try {
+        const h = await window.api.sidecar.health();
+        if (cancelled) return;
+        setVersion(h.version);
+        setSidecarOnline(true);
+      } catch {
+        if (cancelled) return;
+        setVersion(null);
+        setSidecarOnline(false);
+      }
+    };
+    void check();
+    const timer = window.setInterval(() => {
+      void check();
+    }, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, []);
 
   const onJobFinished = (): void => setRefreshKey((k) => k + 1);
@@ -37,7 +55,11 @@ export function App(): JSX.Element {
           </nav>
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
-          {version ? <span>sidecar v{version}</span> : <span className="text-destructive">sidecar offline</span>}
+          {sidecarOnline === null ? <span>sidecar checking…</span> : null}
+          {sidecarOnline === true && version ? <span>sidecar v{version} online</span> : null}
+          {sidecarOnline === false ? (
+            <span className="text-destructive">sidecar offline — processing/search unavailable</span>
+          ) : null}
           <Button variant="ghost" onClick={() => setSettingsOpen(true)}>
             Settings
           </Button>

@@ -67,6 +67,8 @@ async def test_end_to_end_stub_pipeline(
         output_folder=out_folder,
         force=False,
         rename_with_llm=True,  # Ollama unreachable → falls back to original stem
+        ocr_language="eng",
+        max_concurrent_jobs=1,
         model="dummy",
     )
     assert count == 2
@@ -98,6 +100,8 @@ async def test_second_run_skips_duplicates(
         output_folder=out_folder,
         force=False,
         rename_with_llm=False,
+        ocr_language="eng",
+        max_concurrent_jobs=1,
         model="dummy",
     )
     await _await_job(jobs, job_id)
@@ -107,6 +111,8 @@ async def test_second_run_skips_duplicates(
         output_folder=out_folder,
         force=False,
         rename_with_llm=False,
+        ocr_language="eng",
+        max_concurrent_jobs=1,
         model="dummy",
     )
     await _await_job(jobs, job_id2)
@@ -125,6 +131,8 @@ async def test_force_reprocesses(
         output_folder=out_folder,
         force=False,
         rename_with_llm=False,
+        ocr_language="eng",
+        max_concurrent_jobs=1,
         model="dummy",
     )
     await _await_job(jobs, j1)
@@ -133,6 +141,8 @@ async def test_force_reprocesses(
         output_folder=out_folder,
         force=True,
         rename_with_llm=False,
+        ocr_language="eng",
+        max_concurrent_jobs=1,
         model="dummy",
     )
     await _await_job(jobs, j2)

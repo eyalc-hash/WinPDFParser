@@ -8,6 +8,13 @@ Real OCR lets PDF-Parser create searchable output for scanned PDFs. Without it, 
 OCR engine that copies the file and extracts text with the built-in fallback path so the rest of the
 library and search workflow still works.
 
+In **Settings**, you can tune:
+
+- **OCR language(s):** defaults to `eng`, supports multi-language values like `eng+deu`
+- **Max concurrent jobs:** safe range `1-4` to limit CPU/RAM pressure
+
+These settings are applied to new processing/retry jobs.
+
 You need three tools on Windows: Tesseract OCR, Ghostscript, and OCRmyPDF.
 
 ### Install with winget
@@ -98,5 +105,7 @@ installer, and start Ollama from the Start Menu.
 - **Port conflicts:** PDF-Parser chooses an ephemeral local port for its helper, so another app using
   a fixed port should not block startup.
 - **Ollama unreachable:** AI rename falls back silently to the original filename stem.
-- **OCR missing:** PDF-Parser uses the stub OCR engine so the library workflow can still run.
+- **OCR missing:** PDF-Parser automatically falls back to stub OCR (copy + best-effort `pypdf` text
+  extraction). This keeps dedupe, indexing, searching, retry, and library flows operational even when
+  OCRmyPDF/Tesseract are unavailable.
 - **Logs:** App logs live in `%APPDATA%\PDF-Parser\logs\`.

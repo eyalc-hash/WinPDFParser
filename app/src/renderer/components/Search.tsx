@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { SearchHit, SearchResponse } from "@shared/types";
 import { Viewer } from "./Viewer";
 import { Button } from "./ui/Button";
@@ -11,9 +11,11 @@ export function Search(): JSX.Element {
   const [activeQuery, setActiveQuery] = useState("");
   const [result, setResult] = useState<SearchResponse | null>(null);
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const [activeResultIndex, setActiveResultIndex] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [viewerPaging, setViewerPaging] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const fetchSearch = async (query: string, offset = 0): Promise<SearchResponse> => {
     const trimmed = query.trim();
@@ -41,6 +43,44 @@ export function Search(): JSX.Element {
     if (!q.trim()) return;
     await executeSearch(q, 0);
   };
+
+  useEffect(() => {
+    if (!result || result.hits.length === 0) {
+      setActiveResultIndex(0);
+      return;
+    }
+    setActiveResultIndex((current) => Math.min(current, result.hits.length - 1));
+  }, [result]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const target = event.target as HTMLElement | null;
+      if (target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "")) {
+        return;
+      }
+
+      if (event.key === "/") {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+        return;
+      }
+
+      if (!result || result.hits.length === 0 || viewerIndex !== null) return;
+      if (event.key === "ArrowDown" || event.key.toLowerCase() === "j") {
+        event.preventDefault();
+        setActiveResultIndex((current) => Math.min(current + 1, result.hits.length - 1));
+      } else if (event.key === "ArrowUp" || event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setActiveResultIndex((current) => Math.max(current - 1, 0));
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        setViewerIndex(activeResultIndex);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activeResultIndex, result, viewerIndex]);
 
   const navigateViewer = async (direction: "previous" | "next"): Promise<void> => {
     if (!result || viewerIndex === null || viewerPaging) return;
@@ -105,10 +145,12 @@ export function Search(): JSX.Element {
     <div className="relative flex h-full flex-col">
       <form onSubmit={onSubmit} className="flex gap-2 border-b border-border px-4 py-3">
         <Input
+          ref={searchInputRef}
           autoFocus
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search OCR text (FTS5 syntax supported, e.g. invoice AND 2024)"
+          aria-label="Search OCR text"
         />
         <Button variant="primary" type="submit" disabled={loading}>
           {loading ? "…" : "Search"}
@@ -146,7 +188,13 @@ export function Search(): JSX.Element {
           <p className="text-sm text-muted-foreground">No matches.</p>
         ) : null}
         {result?.hits.map((h, index) => (
-          <Hit key={h.document_id} hit={h} onView={() => setViewerIndex(index)} />
+          <Hit
+            key={h.document_id}
+            hit={h}
+            active={activeResultIndex === index}
+            onFocus={() => setActiveResultIndex(index)}
+            onView={() => setViewerIndex(index)}
+          />
         ))}
       </div>
 
@@ -168,7 +216,17 @@ export function Search(): JSX.Element {
   );
 }
 
-function Hit({ hit, onView }: { hit: SearchHit; onView: () => void }): JSX.Element {
+function Hit({
+  hit,
+  active,
+  onFocus,
+  onView,
+}: {
+  hit: SearchHit;
+  active: boolean;
+  onFocus: () => void;
+  onView: () => void;
+}): JSX.Element {
   // FTS5 snippet markup uses `[[ ]]` brackets — render them as <mark>.
   const segments = hit.snippet.split(/(\[\[[^\]]*\]\])/g).map((seg, i) => {
     const m = seg.match(/^\[\[(.*)\]\]$/);
@@ -183,7 +241,22 @@ function Hit({ hit, onView }: { hit: SearchHit; onView: () => void }): JSX.Eleme
   const title = hit.ai_name ?? hit.original_name;
 
   return (
-    <article className="mb-3 rounded-md border border-border bg-card/40 p-3">
+    <article
+      tabIndex={0}
+      aria-selected={active}
+      onFocus={onFocus}
+      onKeyDown={(event) => {
+        if ((event.key === "Enter" || event.key === " ") && hit.output_path) {
+          event.preventDefault();
+          onView();
+        }
+      }}
+      className={
+        "mb-3 rounded-md border bg-card/40 p-3 outline-none transition-colors " +
+        (active ? "border-primary" : "border-border") +
+        " focus:border-primary focus:ring-1 focus:ring-primary"
+      }
+    >
       <header className="mb-1 flex items-center justify-between">
         <h3 className="text-sm font-medium">
           <button
