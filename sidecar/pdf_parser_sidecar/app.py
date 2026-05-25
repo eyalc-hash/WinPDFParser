@@ -7,6 +7,7 @@ Endpoints:
     GET  /jobs/{id}             — single job snapshot
     POST /jobs/{id}/cancel      — cooperative cancel
     GET  /documents             — paginated list
+    POST /documents/{id}/retry  — requeue a failed document
     DELETE /documents/{id}      — remove from index (does not touch the PDF)
     GET  /search?q=...          — FTS5 search
     GET  /settings              — read settings
@@ -31,11 +32,14 @@ from .llm import OllamaClient
 from .logging_setup import configure_logging
 from .models import (
     DocumentList,
+    DocumentSort,
+    DocumentStatus,
     HealthResponse,
     JobList,
     JobProgress,
     ProcessAccepted,
     ProcessRequest,
+    RetryAccepted,
     SearchResponse,
     SettingsModel,
 )
@@ -84,6 +88,7 @@ def create_app(config: Config) -> FastAPI:
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        db.set_settings([("output_folder", req.output_folder), ("input_folder", req.input_folder)])
         return ProcessAccepted(job_id=job_id, file_count=count)
 
     @app.get("/jobs", response_model=JobList)
@@ -107,9 +112,34 @@ def create_app(config: Config) -> FastAPI:
     async def list_documents(
         limit: int = Query(200, ge=1, le=1000),
         offset: int = Query(0, ge=0),
+        status: DocumentStatus | None = None,
+        sort: DocumentSort = "processed_desc",
     ) -> DocumentList:
-        items, total = db.list_documents(limit=limit, offset=offset)
+        items, total = db.list_documents(limit=limit, offset=offset, status=status, sort=sort)
         return DocumentList(items=items, total=total)
+
+    @app.post("/documents/{document_id}/retry", response_model=RetryAccepted)
+    async def retry_document(document_id: int) -> RetryAccepted:
+        document = db.get_document(document_id)
+        if document is None:
+            raise HTTPException(status_code=404, detail="document not found")
+        if document.status != "failed":
+            raise HTTPException(status_code=409, detail="only failed documents can be retried")
+        settings = await get_settings()
+        try:
+            job_id = await jobs.submit_single(
+                document_id=document_id,
+                rename_with_llm=settings.rename_with_llm,
+                model=db.get_setting("model") or config.default_model,
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="document not found") from exc
+        except ValueError as exc:
+            detail = str(exc)
+            if detail != "no output folder configured, run a batch first":
+                detail = "configured output folder is invalid"
+            raise HTTPException(status_code=409, detail=detail) from exc
+        return RetryAccepted(job_id=job_id)
 
     @app.delete("/documents/{document_id}")
     async def delete_document(document_id: int) -> dict[str, bool]:
@@ -145,7 +175,12 @@ def create_app(config: Config) -> FastAPI:
 
     @app.put("/settings", response_model=SettingsModel)
     async def put_settings(s: SettingsModel) -> SettingsModel:
-        db.set_settings([("__all__", s.model_dump_json()), ("model", s.model)])
+        items = [("__all__", s.model_dump_json()), ("model", s.model)]
+        if s.input_folder:
+            items.append(("input_folder", s.input_folder))
+        if s.output_folder:
+            items.append(("output_folder", s.output_folder))
+        db.set_settings(items)
         return s
 
     # ---- ollama -----------------------------------------------------------

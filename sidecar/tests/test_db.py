@@ -64,6 +64,35 @@ def test_search_empty_query_returns_nothing(db: Database) -> None:
     assert db.search("   ") == ([], 0)
 
 
+def test_list_documents_filters_by_status_and_sorts_by_name(db: Database) -> None:
+    done_id = db.upsert_pending("hash-done", "C:/in/z.pdf", "z.pdf")
+    db.mark_done(
+        done_id,
+        output_path="C:/out/z.pdf",
+        ai_name="Bravo",
+        page_count=2,
+        text="done text",
+    )
+    fallback_id = db.upsert_pending("hash-fallback", "C:/in/alpha.pdf", "alpha.pdf")
+    db.mark_done(
+        fallback_id,
+        output_path="C:/out/alpha.pdf",
+        ai_name=None,
+        page_count=5,
+        text="fallback text",
+    )
+    failed_id = db.upsert_pending("hash-failed", "C:/in/c.pdf", "c.pdf")
+    db.mark_failed(failed_id, "boom")
+
+    failed, failed_total = db.list_documents(status="failed")
+    assert failed_total == 1
+    assert failed[0].id == failed_id
+
+    named, named_total = db.list_documents(sort="name_asc")
+    assert named_total == 3
+    assert [doc.id for doc in named] == [fallback_id, done_id, failed_id]
+
+
 def test_search_supports_offset_and_total(db: Database) -> None:
     for idx in range(3):
         h = hashlib.sha256(f"doc-{idx}".encode()).hexdigest()

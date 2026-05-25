@@ -14,6 +14,17 @@ LLM, and provides full-text search — all without ever touching the network.
 - Processed files are prefixed with `ocr_`.
 - Duplicate PDFs (by SHA-256 content hash) are skipped unless `force` is set.
 
+## Download & install (Windows)
+
+Download the latest Windows installer from the
+[GitHub Releases page](https://github.com/eyalc-hash/WinPDFParser/releases/latest).
+For step-by-step instructions, see [docs/INSTALL.md](./docs/INSTALL.md).
+
+## Optional integrations
+
+Optional real OCR and local AI rename setup are covered in
+[docs/OCR_AND_OLLAMA.md](./docs/OCR_AND_OLLAMA.md).
+
 ## Architecture
 
 | Layer            | Tech                                                            |
@@ -101,15 +112,7 @@ pytest
 
 ### Build the Windows installer
 
-```bash
-# 1. Bundle the sidecar with PyInstaller (one-folder)
-cd sidecar && pyinstaller pyinstaller.spec
-
-# 2. Build the Electron app + NSIS installer
-cd ../app && npm run build && npm run dist
-```
-
-The installer is emitted to `app/release/PDF-Parser-Setup-<version>.exe`.
+See [docs/BUILD.md](./docs/BUILD.md).
 
 ## Privacy
 
@@ -120,4 +123,4 @@ calls at runtime unless the user opts in.
 
 ## License
 
-TBD.
+MIT — see [LICENSE](./LICENSE).

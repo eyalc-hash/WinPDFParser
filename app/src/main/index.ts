@@ -8,8 +8,14 @@
 import { app, BrowserWindow } from "electron";
 import { join } from "node:path";
 import { SidecarManager } from "./sidecar";
-import { registerIpcHandlers } from "./ipc";
+import {
+  registerIpcHandlers,
+  registerViewerProtocolHandler,
+  registerViewerProtocolScheme,
+} from "./ipc";
 import { configureAutoUpdater } from "./updater";
+
+registerViewerProtocolScheme();
 
 const sidecar = new SidecarManager();
 let mainWindow: BrowserWindow | null = null;
@@ -65,6 +71,7 @@ async function bootstrap(): Promise<void> {
     process.stderr.write(`[main] sidecar failed to start: ${String(err)}\n`);
     // Still open the window so the user sees an error rather than a black screen.
   }
+  registerViewerProtocolHandler();
   registerIpcHandlers(sidecar);
   createWindow();
 }

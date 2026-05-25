@@ -1,24 +1,24 @@
 # TODO
 
-- [ ] Milestone 1 — Search navigation and result paging
+- [x] Milestone 1 — Search navigation and result paging
   - [x] Start the first slice: add result counts and paging to the current search flow
-  - [ ] Add in-app document viewing for search hits
-  - [ ] Add next/previous hit navigation inside the viewer
-- [ ] Milestone 2 — Library navigation and filtering _(parallel-ready)_
+  - [x] Add in-app document viewing for search hits
+  - [x] Add next/previous hit navigation inside the viewer
+- [x] Milestone 2 — Library navigation and filtering _(parallel-ready)_
   - [x] Parallel sub-agent kickoff: scoped pagination, total-count, filter, and sort changes for `/documents`
-  - [ ] Add library paging controls and total counts
-  - [ ] Add lightweight status filtering
-  - [ ] Add simple sort options
-- [ ] Milestone 3 — Failure visibility and targeted retry
-  - [ ] Surface document-level failure reasons in the Library tab
-  - [ ] Add a retry action for failed documents
-  - [ ] Add a small recent-failures view in Settings
-- [ ] Milestone 4 — Release-readiness docs and assets _(parallel-ready)_
+  - [x] Add library paging controls and total counts
+  - [x] Add lightweight status filtering
+  - [x] Add simple sort options
+- [x] Milestone 3 — Failure visibility and targeted retry
+  - [x] Surface document-level failure reasons in the Library tab
+  - [x] Add a retry action for failed documents
+  - [x] Add a small recent-failures view in Settings
+- [x] Milestone 4 — Release-readiness docs and assets _(parallel-ready)_
   - [x] Parallel sub-agent kickoff: scoped missing release docs and packaging assets
-  - [ ] Add installer/user setup docs
-  - [ ] Add OCR/Ollama setup guidance
-  - [ ] Resolve the missing license file and release notes/changelog
-  - [ ] Add missing build assets required by `electron-builder`
+  - [x] Add installer/user setup docs
+  - [x] Add OCR/Ollama setup guidance
+  - [x] Resolve the missing license file and release notes/changelog
+  - [x] Add missing build assets required by `electron-builder`
 - [ ] Milestone 5 — OCR/runtime controls
   - [ ] Add configurable OCR language selection
   - [ ] Expose safe performance/concurrency settings

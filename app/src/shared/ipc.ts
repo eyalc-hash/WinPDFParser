@@ -5,6 +5,8 @@ export const IPC = {
   RevealInFolder: "shell:reveal",
   OpenAppData: "shell:open-app-data",
   Sidecar: "sidecar:request",
+  ViewerLoadPdf: "viewer:load-pdf",
+  ViewerClear: "viewer:clear",
 } as const;
 
 export type SidecarMethod = "GET" | "POST" | "PUT" | "DELETE";

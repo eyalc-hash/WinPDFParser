@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import type { ButtonHTMLAttributes } from "react";
 
 type Variant = "primary" | "secondary" | "ghost" | "destructive";
@@ -13,13 +14,13 @@ const variants: Record<Variant, string> = {
   destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
 };
 
-export function Button({
-  variant = "secondary",
-  className = "",
-  ...rest
-}: Props): JSX.Element {
+export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
+  { variant = "secondary", className = "", ...rest },
+  ref,
+): JSX.Element {
   return (
     <button
+      ref={ref}
       {...rest}
       className={
         "inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium " +
@@ -29,4 +30,4 @@ export function Button({
       }
     />
   );
-}
+});

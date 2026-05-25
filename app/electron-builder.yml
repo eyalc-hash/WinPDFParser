@@ -3,7 +3,7 @@
 
 appId: com.pdfparser.app
 productName: PDF-Parser
-copyright: Copyright © 2025
+copyright: Copyright © 2025 PDF-Parser contributors
 directories:
   output: release
   buildResources: build
@@ -24,6 +24,7 @@ win:
   target:
     - target: nsis
       arch: [x64]
+  icon: build/icon.ico
   artifactName: "PDF-Parser-Setup-${version}.${ext}"
   # Code-signing: leave env vars unset for unsigned dev builds. Setting
   # CSC_LINK + CSC_KEY_PASSWORD in CI flips on signing without code changes.
@@ -36,6 +37,12 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   deleteAppDataOnUninstall: false
+  installerIcon: build/installerIcon.ico
+  uninstallerIcon: build/uninstallerIcon.ico
+  installerHeader: build/installerHeader.bmp
+  installerSidebar: build/installerSidebar.bmp
+  uninstallerSidebar: build/installerSidebar.bmp
+  license: build/LICENSE.txt
 
 publish:
   # electron-updater is wired up but disabled at runtime (see src/main/updater.ts).

@@ -94,33 +94,37 @@ class JobManager:
         model: str,
     ) -> tuple[str, int]:
         safe_input = _validate_user_folder(input_folder, kind="input")
-        safe_output = _validate_user_folder(output_folder, kind="output")
         files = _list_pdfs(safe_input)
-        safe_output.mkdir(parents=True, exist_ok=True)
-        job_id = uuid.uuid4().hex
-        progress = JobProgress(
-            job_id=job_id,
-            total=len(files),
-            processed=0,
-            skipped=0,
-            failed=0,
-            current_file=None,
-            state="queued",
-        )
-        state = _JobState(
-            job_id=job_id,
+        return await self._enqueue(
             files=files,
+            output_folder=output_folder,
             force=force,
             rename_with_llm=rename_with_llm,
-            output_folder=safe_output,
             model=model,
-            progress=progress,
         )
-        async with self._lock:
-            self._jobs[job_id] = state
-        self.db.upsert_job(progress)
-        state.task = asyncio.create_task(self._run_job(state))
-        return job_id, len(files)
+
+    async def submit_single(
+        self,
+        *,
+        document_id: int,
+        rename_with_llm: bool,
+        model: str,
+    ) -> str:
+        document = self.db.get_document(document_id)
+        if document is None:
+            raise FileNotFoundError("document not found")
+        output_folder = self.db.get_setting("output_folder")
+        if not output_folder:
+            raise ValueError("no output folder configured, run a batch first")
+        self.db.mark_retry_pending(document_id)
+        job_id, _ = await self._enqueue(
+            files=[Path(document.original_path)],
+            output_folder=Path(output_folder),
+            force=True,
+            rename_with_llm=rename_with_llm,
+            model=model,
+        )
+        return job_id
 
     async def cancel(self, job_id: str) -> bool:
         async with self._lock:
@@ -153,6 +157,42 @@ class JobManager:
                 await t
 
     # -- internals ----------------------------------------------------------
+
+    async def _enqueue(
+        self,
+        *,
+        files: list[Path],
+        output_folder: Path,
+        force: bool,
+        rename_with_llm: bool,
+        model: str,
+    ) -> tuple[str, int]:
+        safe_output = _validate_user_folder(output_folder, kind="output")
+        safe_output.mkdir(parents=True, exist_ok=True)
+        job_id = uuid.uuid4().hex
+        progress = JobProgress(
+            job_id=job_id,
+            total=len(files),
+            processed=0,
+            skipped=0,
+            failed=0,
+            current_file=None,
+            state="queued",
+        )
+        state = _JobState(
+            job_id=job_id,
+            files=files,
+            force=force,
+            rename_with_llm=rename_with_llm,
+            output_folder=safe_output,
+            model=model,
+            progress=progress,
+        )
+        async with self._lock:
+            self._jobs[job_id] = state
+        self.db.upsert_job(progress)
+        state.task = asyncio.create_task(self._run_job(state))
+        return job_id, len(files)
 
     async def _run_job(self, state: _JobState) -> None:
         async with self._semaphore:
