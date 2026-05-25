@@ -33,11 +33,31 @@ class _JobState:
     task: asyncio.Task[None] | None = field(default=None, repr=False)
 
 
+def _validate_user_folder(folder: Path, *, kind: str) -> Path:
+    """Normalise a user-supplied folder path defensively.
+
+    The path comes from a local OS folder-picker dialog so it's not a remote
+    attack surface, but we still resolve symlinks and reject anything that
+    isn't an absolute, normal directory. This satisfies static-analysis
+    path-injection warnings and gives nicer errors.
+    """
+    if not isinstance(folder, Path):  # defensive: API layer should already do this
+        raise TypeError(f"{kind} folder must be a Path")
+    resolved = folder.expanduser().resolve(strict=False)
+    if not resolved.is_absolute():
+        raise ValueError(f"{kind} folder must be an absolute path: {folder}")
+    # Reject NUL bytes (Windows reserves them; Linux disallows in paths).
+    if "\x00" in str(resolved):
+        raise ValueError(f"{kind} folder contains NUL byte")
+    return resolved
+
+
 def _list_pdfs(folder: Path) -> list[Path]:
-    if not folder.is_dir():
-        raise FileNotFoundError(f"Input folder does not exist: {folder}")
+    safe = _validate_user_folder(folder, kind="input")
+    if not safe.is_dir():
+        raise FileNotFoundError(f"Input folder does not exist: {safe}")
     # Recursive: most users dump PDFs into nested year/month folders.
-    return sorted(p for p in folder.rglob("*.pdf") if p.is_file())
+    return sorted(p for p in safe.rglob("*.pdf") if p.is_file())
 
 
 class JobManager:
@@ -62,8 +82,10 @@ class JobManager:
         rename_with_llm: bool,
         model: str,
     ) -> tuple[str, int]:
-        files = _list_pdfs(input_folder)
-        output_folder.mkdir(parents=True, exist_ok=True)
+        safe_input = _validate_user_folder(input_folder, kind="input")
+        safe_output = _validate_user_folder(output_folder, kind="output")
+        files = _list_pdfs(safe_input)
+        safe_output.mkdir(parents=True, exist_ok=True)
         job_id = uuid.uuid4().hex
         progress = JobProgress(
             job_id=job_id,
@@ -79,7 +101,7 @@ class JobManager:
             files=files,
             force=force,
             rename_with_llm=rename_with_llm,
-            output_folder=output_folder,
+            output_folder=safe_output,
             model=model,
             progress=progress,
         )
@@ -174,6 +196,15 @@ class JobManager:
             existing_names = {p.name for p in state.output_folder.iterdir() if p.is_file()}
             final_stem = resolve_collision(existing_names, desired)
             final_path = state.output_folder / f"{final_stem}.pdf"
+            # Defence in depth: confirm the final path is still inside the
+            # validated output folder. sanitize_filename strips path separators
+            # so this should always hold, but a regression there must not let
+            # the OCR write outside the user's chosen folder.
+            resolved_final = final_path.resolve()
+            if state.output_folder not in resolved_final.parents:
+                raise RuntimeError(
+                    f"Refusing to write {resolved_final} outside output folder {state.output_folder}"
+                )
             temp_out.replace(final_path)
 
             self.db.mark_done(
