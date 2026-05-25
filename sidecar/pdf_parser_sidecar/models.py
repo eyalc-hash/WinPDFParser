@@ -133,3 +133,31 @@ class IndexRebuildResponse(BaseModel):
 
 class MaintenanceResponse(BaseModel):
     optimized: bool
+
+
+class OcrToolsStatus(BaseModel):
+    has_ocrmypdf_package: bool
+    tesseract_available: bool
+    ghostscript_available: bool
+    real_ocr_ready: bool
+
+
+class HealthDetailsResponse(BaseModel):
+    status: Literal["ok"]
+    version: str
+    ollama_available: bool
+    active_jobs: int
+    recent_jobs: int
+    ocr: OcrToolsStatus
+
+
+class ClearTempResponse(BaseModel):
+    output_folder: str | None
+    cleared: int
+
+
+class RetryFailedBatchResponse(BaseModel):
+    queued: int
+    skipped_non_retryable: int
+    skipped_retry_limit: int
+    job_ids: list[str]

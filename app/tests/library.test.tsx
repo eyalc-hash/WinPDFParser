@@ -42,9 +42,12 @@ beforeEach(() => {
       getSettings: vi.fn(),
       putSettings: vi.fn(),
       ollamaStatus: vi.fn(),
+      healthDetails: vi.fn(),
       getIndexHealth: vi.fn(),
       rebuildIndex: vi.fn(),
       optimizeIndex: vi.fn(),
+      clearTempFiles: vi.fn(),
+      retryFailedBatch: vi.fn(),
     },
   } as unknown as ElectronApi;
 });

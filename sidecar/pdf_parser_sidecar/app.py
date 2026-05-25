@@ -31,22 +31,27 @@ from .db import Database
 from .llm import OllamaClient
 from .logging_setup import configure_logging
 from .models import (
+    ClearTempResponse,
     DocumentList,
     DocumentSort,
     DocumentStatus,
+    HealthDetailsResponse,
     HealthResponse,
     IndexHealthResponse,
     IndexRebuildResponse,
     JobList,
     JobProgress,
     MaintenanceResponse,
+    OcrToolsStatus,
     ProcessAccepted,
     ProcessRequest,
     RetryAccepted,
+    RetryFailedBatchResponse,
     SearchRank,
     SearchResponse,
     SettingsModel,
 )
+from .ocr import ocr_tool_status
 from .queue import JobManager, reconcile_on_startup
 
 
@@ -59,6 +64,7 @@ def create_app(config: Config) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        await jobs.restore_pending()
         try:
             yield
         finally:
@@ -75,6 +81,17 @@ def create_app(config: Config) -> FastAPI:
     @app.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
         return HealthResponse(status="ok", version=__version__)
+
+    @app.get("/health/details", response_model=HealthDetailsResponse)
+    async def health_details() -> HealthDetailsResponse:
+        return HealthDetailsResponse(
+            status="ok",
+            version=__version__,
+            ollama_available=ollama.is_available(),
+            active_jobs=len(jobs.list_active()),
+            recent_jobs=len(db.list_jobs(limit=20)),
+            ocr=OcrToolsStatus(**ocr_tool_status()),
+        )
 
     # ---- processing -------------------------------------------------------
 
@@ -237,6 +254,61 @@ def create_app(config: Config) -> FastAPI:
     async def maintenance_optimize() -> MaintenanceResponse:
         db.optimize()
         return MaintenanceResponse(optimized=True)
+
+    @app.post("/recovery/clear-temp", response_model=ClearTempResponse)
+    async def recovery_clear_temp() -> ClearTempResponse:
+        output_folder = db.get_setting("output_folder")
+        if not output_folder:
+            return ClearTempResponse(output_folder=None, cleared=0)
+        folder = Path(output_folder)
+        if not folder.exists() or not folder.is_dir():
+            return ClearTempResponse(output_folder=output_folder, cleared=0)
+        cleared = 0
+        for candidate in folder.rglob("*.tmp"):
+            if not candidate.is_file():
+                continue
+            try:
+                candidate.unlink()
+                cleared += 1
+            except OSError:
+                continue
+        return ClearTempResponse(output_folder=output_folder, cleared=cleared)
+
+    @app.post("/recovery/retry-failed", response_model=RetryFailedBatchResponse)
+    async def recovery_retry_failed_batch(
+        limit: int = Query(200, ge=1, le=1000),
+    ) -> RetryFailedBatchResponse:
+        settings = await get_settings()
+        failed_items, _ = db.list_documents(
+            limit=limit, offset=0, status="failed", sort="processed_desc"
+        )
+        job_ids: list[str] = []
+        skipped_non_retryable = 0
+        skipped_retry_limit = 0
+        for document in failed_items:
+            if not document.retryable:
+                skipped_non_retryable += 1
+                continue
+            if document.retry_count >= 3:
+                skipped_retry_limit += 1
+                continue
+            try:
+                job_id = await jobs.submit_single(
+                    document_id=document.id,
+                    rename_with_llm=settings.rename_with_llm,
+                    ocr_language=settings.ocr_language,
+                    max_concurrent_jobs=settings.max_concurrent_jobs,
+                    model=db.get_setting("model") or config.default_model,
+                )
+                job_ids.append(job_id)
+            except (FileNotFoundError, ValueError):
+                skipped_non_retryable += 1
+        return RetryFailedBatchResponse(
+            queued=len(job_ids),
+            skipped_non_retryable=skipped_non_retryable,
+            skipped_retry_limit=skipped_retry_limit,
+            job_ids=job_ids,
+        )
 
     # ---- fallback error handler -------------------------------------------
 

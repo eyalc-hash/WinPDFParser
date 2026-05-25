@@ -8,6 +8,7 @@ import type {
   DocumentList,
   ElectronApi,
   HealthResponse,
+  HealthDetails,
   JobList,
   JobProgress,
   OllamaStatus,
@@ -77,11 +78,28 @@ const api: ElectronApi = {
     putSettings: (s) =>
       callSidecar<SettingsModel>({ method: "PUT", path: "/settings", body: s }),
     ollamaStatus: () => callSidecar<OllamaStatus>({ method: "GET", path: "/ollama/status" }),
+    healthDetails: () => callSidecar<HealthDetails>({ method: "GET", path: "/health/details" }),
     getIndexHealth: () => callSidecar<IndexHealth>({ method: "GET", path: "/index/health" }),
     rebuildIndex: () =>
       callSidecar<{ rebuilt_rows: number }>({ method: "POST", path: "/index/rebuild" }),
     optimizeIndex: () =>
       callSidecar<{ optimized: boolean }>({ method: "POST", path: "/maintenance/optimize" }),
+    clearTempFiles: () =>
+      callSidecar<{ output_folder: string | null; cleared: number }>({
+        method: "POST",
+        path: "/recovery/clear-temp",
+      }),
+    retryFailedBatch: (limit = 200) =>
+      callSidecar<{
+        queued: number;
+        skipped_non_retryable: number;
+        skipped_retry_limit: number;
+        job_ids: string[];
+      }>({
+        method: "POST",
+        path: "/recovery/retry-failed",
+        query: { limit },
+      }),
   },
 };
 

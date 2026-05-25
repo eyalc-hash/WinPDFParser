@@ -130,3 +130,15 @@ def run_ocr(input_pdf: Path, output_pdf: Path, *, language: str = "eng") -> OcrR
         author=author,
         source_created_at=source_created_at,
     )
+
+
+def ocr_tool_status() -> dict[str, bool]:
+    tesseract_available = shutil.which("tesseract") is not None
+    ghostscript_available = shutil.which("gs") is not None or shutil.which("gswin64c") is not None
+    real_ocr_ready = _HAS_OCRMYPDF and tesseract_available and ghostscript_available
+    return {
+        "has_ocrmypdf_package": _HAS_OCRMYPDF,
+        "tesseract_available": tesseract_available,
+        "ghostscript_available": ghostscript_available,
+        "real_ocr_ready": real_ocr_ready,
+    }

@@ -53,6 +53,19 @@ beforeEach(() => {
       getSettings: vi.fn().mockResolvedValue(settings),
       putSettings: vi.fn().mockResolvedValue(settings),
       ollamaStatus: vi.fn().mockResolvedValue({ available: true, url: settings.ollama_url }),
+      healthDetails: vi.fn().mockResolvedValue({
+        status: "ok",
+        version: "0.1.0",
+        ollama_available: true,
+        active_jobs: 0,
+        recent_jobs: 1,
+        ocr: {
+          has_ocrmypdf_package: false,
+          tesseract_available: false,
+          ghostscript_available: false,
+          real_ocr_ready: false,
+        },
+      }),
       getIndexHealth: vi.fn().mockResolvedValue({
         documents_total: 2,
         indexed_total: 2,
@@ -62,6 +75,13 @@ beforeEach(() => {
       }),
       rebuildIndex: vi.fn().mockResolvedValue({ rebuilt_rows: 2 }),
       optimizeIndex: vi.fn().mockResolvedValue({ optimized: true }),
+      clearTempFiles: vi.fn().mockResolvedValue({ output_folder: "C:/out", cleared: 3 }),
+      retryFailedBatch: vi.fn().mockResolvedValue({
+        queued: 2,
+        skipped_non_retryable: 0,
+        skipped_retry_limit: 0,
+        job_ids: ["a", "b"],
+      }),
     },
   } as unknown as ElectronApi;
 });
@@ -152,6 +172,25 @@ describe("Settings recent failures", () => {
     await flushEffects();
 
     expect(retryDocument).toHaveBeenCalledWith(11);
+
+    await act(async () => root.unmount());
+  });
+
+  it("shows health details and runs recovery actions", async () => {
+    const root = await renderSettings();
+    expect(document.body.textContent).toContain("OCR tools:");
+
+    await act(async () => {
+      buttonsNamed("Clear temp files")[0].click();
+    });
+    await flushEffects();
+    expect(document.body.textContent).toContain("Cleared 3 temp file(s)");
+
+    await act(async () => {
+      buttonsNamed("Re-run failed batch")[0].click();
+    });
+    await flushEffects();
+    expect(document.body.textContent).toContain("Queued 2 retry job(s)");
 
     await act(async () => root.unmount());
   });

@@ -139,6 +139,22 @@ export interface IndexHealth {
   orphaned_fts_rows: number;
 }
 
+export interface OcrToolsStatus {
+  has_ocrmypdf_package: boolean;
+  tesseract_available: boolean;
+  ghostscript_available: boolean;
+  real_ocr_ready: boolean;
+}
+
+export interface HealthDetails {
+  status: "ok";
+  version: string;
+  ollama_available: boolean;
+  active_jobs: number;
+  recent_jobs: number;
+  ocr: OcrToolsStatus;
+}
+
 /** Surface exposed by `preload` on `window.api`. */
 export interface ElectronApi {
   pickFolder: (kind: "input" | "output") => Promise<string | null>;
@@ -164,9 +180,17 @@ export interface ElectronApi {
     getSettings: () => Promise<SettingsModel>;
     putSettings: (s: SettingsModel) => Promise<SettingsModel>;
     ollamaStatus: () => Promise<OllamaStatus>;
+    healthDetails: () => Promise<HealthDetails>;
     getIndexHealth: () => Promise<IndexHealth>;
     rebuildIndex: () => Promise<{ rebuilt_rows: number }>;
     optimizeIndex: () => Promise<{ optimized: boolean }>;
+    clearTempFiles: () => Promise<{ output_folder: string | null; cleared: number }>;
+    retryFailedBatch: (limit?: number) => Promise<{
+      queued: number;
+      skipped_non_retryable: number;
+      skipped_retry_limit: number;
+      job_ids: string[];
+    }>;
   };
 }
 

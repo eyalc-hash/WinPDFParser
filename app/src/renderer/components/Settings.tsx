@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import type { DocumentRow, IndexHealth, OllamaStatus, SettingsModel } from "@shared/types";
+import type {
+  DocumentRow,
+  HealthDetails,
+  IndexHealth,
+  OllamaStatus,
+  SettingsModel,
+} from "@shared/types";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 
@@ -11,8 +17,11 @@ export function SettingsDrawer({ onClose }: Props): JSX.Element {
   const [settings, setSettings] = useState<SettingsModel | null>(null);
   const [ollama, setOllama] = useState<OllamaStatus | null>(null);
   const [failures, setFailures] = useState<DocumentRow[]>([]);
+  const [healthDetails, setHealthDetails] = useState<HealthDetails | null>(null);
   const [indexHealth, setIndexHealth] = useState<IndexHealth | null>(null);
   const [maintenanceBusy, setMaintenanceBusy] = useState(false);
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+  const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
   const [diagnosticsPath, setDiagnosticsPath] = useState<string | null>(null);
   const [failuresLoading, setFailuresLoading] = useState(false);
   const [retryingId, setRetryingId] = useState<number | null>(null);
@@ -35,6 +44,7 @@ export function SettingsDrawer({ onClose }: Props): JSX.Element {
     void Promise.all([
       window.api.sidecar.getSettings().then(setSettings).catch((e) => setError((e as Error).message)),
       window.api.sidecar.ollamaStatus().then(setOllama).catch(() => setOllama(null)),
+      window.api.sidecar.healthDetails().then(setHealthDetails).catch(() => setHealthDetails(null)),
       loadFailures(),
       window.api.sidecar.getIndexHealth().then(setIndexHealth).catch(() => setIndexHealth(null)),
     ]);
@@ -215,6 +225,22 @@ export function SettingsDrawer({ onClose }: Props): JSX.Element {
 
             <section className="border-t border-border pt-3">
               <h3 className="mb-2 text-sm font-semibold">Diagnostics</h3>
+              {healthDetails ? (
+                <div className="mb-2 rounded-md border border-border p-2 text-xs text-muted-foreground">
+                  <p>
+                    Sidecar v{healthDetails.version} · jobs: {healthDetails.active_jobs} active /{" "}
+                    {healthDetails.recent_jobs} recent
+                  </p>
+                  <p>
+                    OCR tools: package {healthDetails.ocr.has_ocrmypdf_package ? "✓" : "✗"}, tesseract{" "}
+                    {healthDetails.ocr.tesseract_available ? "✓" : "✗"}, ghostscript{" "}
+                    {healthDetails.ocr.ghostscript_available ? "✓" : "✗"}
+                  </p>
+                  <p>Real OCR ready: {healthDetails.ocr.real_ocr_ready ? "yes" : "no (stub fallback)"}</p>
+                </div>
+              ) : (
+                <p className="mb-2 text-xs text-muted-foreground">Health details unavailable.</p>
+              )}
               <div className="flex items-center gap-2">
                 <Button
                   variant="ghost"
@@ -230,12 +256,58 @@ export function SettingsDrawer({ onClose }: Props): JSX.Element {
                 >
                   Export diagnostics bundle
                 </Button>
+                <Button
+                  variant="ghost"
+                  disabled={recoveryBusy}
+                  onClick={async () => {
+                    setRecoveryBusy(true);
+                    setRecoveryNotice(null);
+                    setError(null);
+                    try {
+                      const result = await window.api.sidecar.clearTempFiles();
+                      setRecoveryNotice(
+                        `Cleared ${result.cleared} temp file(s)${
+                          result.output_folder ? ` in ${result.output_folder}` : ""
+                        }.`,
+                      );
+                    } catch (err) {
+                      setError((err as Error).message);
+                    } finally {
+                      setRecoveryBusy(false);
+                    }
+                  }}
+                >
+                  Clear temp files
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={recoveryBusy}
+                  onClick={async () => {
+                    setRecoveryBusy(true);
+                    setRecoveryNotice(null);
+                    setError(null);
+                    try {
+                      const result = await window.api.sidecar.retryFailedBatch(200);
+                      setRecoveryNotice(
+                        `Queued ${result.queued} retry job(s); skipped ${result.skipped_non_retryable} non-retryable and ${result.skipped_retry_limit} over limit.`,
+                      );
+                      await loadFailures();
+                    } catch (err) {
+                      setError((err as Error).message);
+                    } finally {
+                      setRecoveryBusy(false);
+                    }
+                  }}
+                >
+                  Re-run failed batch
+                </Button>
               </div>
               {diagnosticsPath ? (
                 <p className="mt-1 text-xs text-muted-foreground" title={diagnosticsPath}>
                   Saved: {diagnosticsPath}
                 </p>
               ) : null}
+              {recoveryNotice ? <p className="mt-1 text-xs text-muted-foreground">{recoveryNotice}</p> : null}
             </section>
 
             <div className="border-t border-border pt-3">

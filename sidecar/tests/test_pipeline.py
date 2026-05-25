@@ -8,6 +8,7 @@ adding a heavy dep.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from pathlib import Path
 
 import pytest
@@ -148,3 +149,55 @@ async def test_force_reprocesses(
     await _await_job(jobs, j2)
     snap = jobs.snapshot(j2)
     assert snap is not None and snap.processed == 2 and snap.skipped == 0
+
+
+@pytest.mark.asyncio
+async def test_restore_pending_jobs_after_restart(tmp_path: Path) -> None:
+    app_data = tmp_path / "appdata"
+    config = Config.load(app_data_override=str(app_data))
+    db = Database(config.db_path)
+    ollama = OllamaClient(base_url="http://127.0.0.1:1")
+    jobs = JobManager(config, db, ollama)
+    in_folder = tmp_path / "in"
+    out_folder = tmp_path / "out"
+    in_folder.mkdir()
+    (in_folder / "restore.pdf").write_bytes(_MINIMAL_PDF)
+
+    blocker = asyncio.Event()
+
+    async def blocked_run_job(state: object) -> None:
+        _ = state
+        await blocker.wait()
+
+    jobs._run_job = blocked_run_job  # type: ignore[method-assign]
+    job_id, _ = await jobs.submit(
+        input_folder=in_folder,
+        output_folder=out_folder,
+        force=False,
+        rename_with_llm=False,
+        ocr_language="eng",
+        max_concurrent_jobs=1,
+        model="dummy",
+    )
+
+    raw_queue_state = db.get_setting("__queue_state__")
+    assert raw_queue_state is not None and job_id in raw_queue_state
+
+    restored = JobManager(config, db, ollama)
+
+    async def restored_noop(state: object) -> None:
+        _ = state
+        return
+
+    restored._run_job = restored_noop  # type: ignore[method-assign]
+    restored_count = await restored.restore_pending()
+    assert restored_count == 1
+    snap = restored.snapshot(job_id)
+    assert snap is not None and snap.state == "queued"
+
+    blocker.set()
+    await jobs.shutdown()
+    await restored.shutdown()
+    db.close()
+    with contextlib.suppress(asyncio.CancelledError):
+        await asyncio.sleep(0)
