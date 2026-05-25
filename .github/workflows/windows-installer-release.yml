@@ -47,6 +47,16 @@ jobs:
 
       - name: Build Windows installer with electron-builder
         working-directory: app
+        # electron-builder runs an internal `npm install --omit=dev` inside `app/`
+        # before packaging. Because `app/` is an npm workspace member, that install
+        # would otherwise be evaluated against the whole workspace and prune all
+        # devDependencies (including electron-builder's own `7zip-bin`) from the
+        # hoisted root `node_modules`, causing the build to fail with
+        # `ENOENT chmod node_modules/7zip-bin/win/x64/7za.exe`.
+        # Setting `npm_config_workspaces=false` makes that internal install treat
+        # `app/` as a standalone package so the root `node_modules` is left intact.
+        env:
+          npm_config_workspaces: "false"
         run: npm run dist
 
       - name: Upload installer artifact
