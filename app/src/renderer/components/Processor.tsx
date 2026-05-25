@@ -18,6 +18,7 @@ export function Processor({ onFinished }: Props): JSX.Element {
   const [force, setForce] = useState(false);
   const [rename, setRename] = useState(true);
   const [job, setJob] = useState<JobProgress | null>(null);
+  const [notice, setNotice] = useState<{ tone: "ok" | "warn" | "error"; text: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
 
@@ -61,6 +62,7 @@ export function Processor({ onFinished }: Props): JSX.Element {
 
   const run = async (): Promise<void> => {
     setError(null);
+    setNotice(null);
     if (!input || !output) {
       setError("Pick both an input and an output folder first.");
       return;
@@ -82,6 +84,22 @@ export function Processor({ onFinished }: Props): JSX.Element {
           if (j.state === "done" || j.state === "failed" || j.state === "cancelled") {
             if (pollRef.current !== null) window.clearInterval(pollRef.current);
             pollRef.current = null;
+            if (j.state === "done") {
+              setNotice({
+                tone: j.failed > 0 ? "warn" : "ok",
+                text:
+                  j.failed > 0
+                    ? `Finished with ${j.failed} failure(s). ${j.processed} processed, ${j.skipped} skipped.`
+                    : `Finished successfully. ${j.processed} processed, ${j.skipped} skipped.`,
+              });
+            } else if (j.state === "cancelled") {
+              setNotice({
+                tone: "warn",
+                text: `Cancelled. ${j.processed} processed, ${j.skipped} skipped, ${j.failed} failed.`,
+              });
+            } else {
+              setNotice({ tone: "error", text: "Job failed. Check Library/Settings for details." });
+            }
             onFinished();
           }
         } catch (err) {
@@ -137,6 +155,22 @@ export function Processor({ onFinished }: Props): JSX.Element {
       </div>
 
       {job ? <Progress job={job} /> : null}
+      {notice ? (
+        <p
+          role="status"
+          aria-live="polite"
+          className={
+            "mt-2 text-xs " +
+            (notice.tone === "ok"
+              ? "text-emerald-400"
+              : notice.tone === "warn"
+                ? "text-amber-300"
+                : "text-destructive")
+          }
+        >
+          {notice.text}
+        </p>
+      ) : null}
       {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
     </section>
   );
@@ -169,7 +203,7 @@ function FolderPicker({
 function Progress({ job }: { job: JobProgress }): JSX.Element {
   const pct = job.total > 0 ? Math.round(((job.processed + job.skipped + job.failed) / job.total) * 100) : 0;
   return (
-    <div className="mt-3">
+    <div className="mt-3" role="status" aria-live="polite">
       <div className="mb-1 flex justify-between text-xs text-muted-foreground">
         <span>
           {job.state} — {job.processed} done · {job.skipped} skipped · {job.failed} failed · {job.total} total

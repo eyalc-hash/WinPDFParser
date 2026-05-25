@@ -112,6 +112,36 @@ export function SettingsDrawer({ onClose }: Props): JSX.Element {
               Use LLM to rename files
             </label>
 
+            <Field label="OCR language(s)">
+              <Input
+                value={settings.ocr_language}
+                onChange={(e) => setSettings({ ...settings, ocr_language: e.target.value })}
+                placeholder="eng"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Tesseract language code(s), e.g. <code>eng</code> or <code>eng+deu</code>. Used
+                only when real OCR is installed.
+              </p>
+            </Field>
+
+            <Field label="Max concurrent jobs">
+              <Input
+                type="number"
+                min={1}
+                max={4}
+                value={settings.max_concurrent_jobs}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    max_concurrent_jobs: Math.max(1, Math.min(4, Number(e.target.value || 1))),
+                  })
+                }
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                Safe range <code>1-4</code>. Higher values can increase CPU/RAM usage.
+              </p>
+            </Field>
+
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"

@@ -119,11 +119,15 @@ def test_settings_roundtrip(client: TestClient) -> None:
     body = r.json()
     body["model"] = "qwen2.5:3b"
     body["input_folder"] = "C:/Users/me/in"
+    body["ocr_language"] = "deu+eng"
+    body["max_concurrent_jobs"] = 2
     r2 = client.put("/settings", json=body)
     assert r2.status_code == 200
     r3 = client.get("/settings")
     assert r3.json()["model"] == "qwen2.5:3b"
     assert r3.json()["input_folder"] == "C:/Users/me/in"
+    assert r3.json()["ocr_language"] == "deu+eng"
+    assert r3.json()["max_concurrent_jobs"] == 2
 
 
 def test_process_rejects_missing_folder(client: TestClient, tmp_path: Path) -> None:

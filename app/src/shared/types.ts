@@ -95,6 +95,8 @@ export interface SettingsModel {
   auto_update: boolean;
   ollama_url: string;
   rename_with_llm: boolean;
+  ocr_language: string;
+  max_concurrent_jobs: number;
 }
 
 export interface OllamaStatus {

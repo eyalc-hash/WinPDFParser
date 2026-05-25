@@ -19,11 +19,11 @@
   - [x] Add OCR/Ollama setup guidance
   - [x] Resolve the missing license file and release notes/changelog
   - [x] Add missing build assets required by `electron-builder`
-- [ ] Milestone 5 — OCR/runtime controls
-  - [ ] Add configurable OCR language selection
-  - [ ] Expose safe performance/concurrency settings
-  - [ ] Keep stub OCR fallback behavior clearly documented
-- [ ] Milestone 6 — UX polish and resilience
-  - [ ] Improve sidecar/offline status messaging
-  - [ ] Add better completion/error feedback around long-running jobs
-  - [ ] Improve keyboard/accessibility support for search and library views
+- [x] Milestone 5 — OCR/runtime controls
+  - [x] Add configurable OCR language selection
+  - [x] Expose safe performance/concurrency settings
+  - [x] Keep stub OCR fallback behavior clearly documented
+- [x] Milestone 6 — UX polish and resilience
+  - [x] Improve sidecar/offline status messaging
+  - [x] Add better completion/error feedback around long-running jobs
+  - [x] Improve keyboard/accessibility support for search and library views

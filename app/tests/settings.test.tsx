@@ -13,6 +13,8 @@ const settings: SettingsModel = {
   auto_update: false,
   ollama_url: "http://127.0.0.1:11434",
   rename_with_llm: true,
+  ocr_language: "eng",
+  max_concurrent_jobs: 1,
 };
 
 const listFailedDocuments = vi.fn<

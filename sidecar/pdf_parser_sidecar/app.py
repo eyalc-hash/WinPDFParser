@@ -78,12 +78,15 @@ def create_app(config: Config) -> FastAPI:
     async def process(req: ProcessRequest) -> ProcessAccepted:
         # Read the current model from settings; fall back to the configured default.
         model = db.get_setting("model") or config.default_model
+        settings = await get_settings()
         try:
             job_id, count = await jobs.submit(
                 input_folder=Path(req.input_folder),
                 output_folder=Path(req.output_folder),
                 force=req.force,
                 rename_with_llm=req.rename_with_llm,
+                ocr_language=settings.ocr_language,
+                max_concurrent_jobs=settings.max_concurrent_jobs,
                 model=model,
             )
         except FileNotFoundError as exc:
@@ -130,6 +133,8 @@ def create_app(config: Config) -> FastAPI:
             job_id = await jobs.submit_single(
                 document_id=document_id,
                 rename_with_llm=settings.rename_with_llm,
+                ocr_language=settings.ocr_language,
+                max_concurrent_jobs=settings.max_concurrent_jobs,
                 model=db.get_setting("model") or config.default_model,
             )
         except FileNotFoundError as exc:
@@ -171,7 +176,11 @@ def create_app(config: Config) -> FastAPI:
                 return SettingsModel(**json.loads(raw))
             except (ValueError, TypeError):
                 pass
-        return SettingsModel(ollama_url=config.ollama_url, model=config.default_model)
+        return SettingsModel(
+            ollama_url=config.ollama_url,
+            model=config.default_model,
+            max_concurrent_jobs=config.max_concurrent_jobs,
+        )
 
     @app.put("/settings", response_model=SettingsModel)
     async def put_settings(s: SettingsModel) -> SettingsModel:

@@ -90,6 +90,8 @@ class SettingsModel(BaseModel):
     auto_update: bool = False
     ollama_url: str = "http://127.0.0.1:11434"
     rename_with_llm: bool = True
+    ocr_language: str = "eng"
+    max_concurrent_jobs: int = Field(default=1, ge=1, le=4)
 
 
 class ErrorResponse(BaseModel):

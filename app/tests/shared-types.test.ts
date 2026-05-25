@@ -41,6 +41,8 @@ describe("shared types contract", () => {
       auto_update: false,
       ollama_url: "http://127.0.0.1:11434",
       rename_with_llm: true,
+      ocr_language: "eng",
+      max_concurrent_jobs: 1,
     };
     expect(s.model).toMatch(/llama|qwen|mistral|phi/);
   });

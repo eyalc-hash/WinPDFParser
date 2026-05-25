@@ -66,6 +66,7 @@ surface exposed by `preload`.
 - (Optional) OCRmyPDF + Tesseract + Ghostscript on `PATH` for real OCR
   - Without these, the sidecar uses a stub OCR engine that copies the file and
     extracts text via `pypdf` so the rest of the pipeline can be exercised.
+  - OCR language(s) and safe runtime concurrency can be configured in **Settings**.
 
 ### First-time install
 
