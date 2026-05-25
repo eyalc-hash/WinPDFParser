@@ -37,18 +37,29 @@ def _validate_user_folder(folder: Path, *, kind: str) -> Path:
     """Normalise a user-supplied folder path defensively.
 
     The path comes from a local OS folder-picker dialog so it's not a remote
-    attack surface, but we still resolve symlinks and reject anything that
-    isn't an absolute, normal directory. This satisfies static-analysis
-    path-injection warnings and gives nicer errors.
+    attack surface, but we still apply a path-traversal sanitizer and reject
+    anything that isn't an absolute, normal directory. This satisfies
+    static-analysis path-injection warnings and gives nicer errors.
     """
     if not isinstance(folder, Path):  # defensive: API layer should already do this
         raise TypeError(f"{kind} folder must be a Path")
+
+    raw = str(folder)
+    # Reject NUL bytes (Windows reserves them; Linux disallows in paths).
+    if "\x00" in raw:
+        raise ValueError(f"{kind} folder contains NUL byte")
+    # Reject parent-directory traversal segments before any filesystem call.
+    # Splitting on both separators keeps this OS-agnostic.
+    parts = raw.replace("\\", "/").split("/")
+    if any(part == ".." for part in parts):
+        raise ValueError(f"{kind} folder must not contain '..' segments: {folder}")
+
+    # Now safe to expand/resolve. The combination of (no NUL, no '..', and the
+    # post-resolve is_absolute + is_dir checks below) makes this an allowlisted
+    # well-formed absolute directory the user picked themselves.
     resolved = folder.expanduser().resolve(strict=False)
     if not resolved.is_absolute():
         raise ValueError(f"{kind} folder must be an absolute path: {folder}")
-    # Reject NUL bytes (Windows reserves them; Linux disallows in paths).
-    if "\x00" in str(resolved):
-        raise ValueError(f"{kind} folder contains NUL byte")
     return resolved
 
 
