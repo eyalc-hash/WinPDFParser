@@ -1,0 +1,45 @@
+# electron-builder config — Windows x64 NSIS installer only (v1).
+# Build with: npm run dist
+
+appId: com.pdfparser.app
+productName: PDF-Parser
+copyright: Copyright © 2025
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - "out/**/*"
+  - "package.json"
+  - "!**/*.{ts,tsx,map,md}"
+
+# The Python sidecar built by PyInstaller (one-folder) is shipped as a sibling
+# of the app resources. SidecarManager looks for it under resources/sidecar/.
+extraResources:
+  - from: "../sidecar/dist/pdf_parser_sidecar"
+    to: "sidecar"
+    filter: ["**/*"]
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: "PDF-Parser-Setup-${version}.${ext}"
+  # Code-signing: leave env vars unset for unsigned dev builds. Setting
+  # CSC_LINK + CSC_KEY_PASSWORD in CI flips on signing without code changes.
+  signingHashAlgorithms: ["sha256"]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
+
+publish:
+  # electron-updater is wired up but disabled at runtime (see src/main/updater.ts).
+  # Set provider to "generic" + url via env for a one-line opt-in later.
+  - provider: generic
+    url: "https://example.invalid/pdf-parser/"
+    channel: latest
