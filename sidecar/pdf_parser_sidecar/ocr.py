@@ -41,6 +41,9 @@ class OcrResult:
     text: str
     page_count: int
     used_real_ocr: bool
+    title: str | None = None
+    author: str | None = None
+    source_created_at: str | None = None
 
 
 def sha256_of_file(path: Path, *, chunk: int = 1 << 20) -> str:
@@ -55,16 +58,22 @@ def sha256_of_file(path: Path, *, chunk: int = 1 << 20) -> str:
     return h.hexdigest()
 
 
-def _extract_text_pypdf(pdf: Path) -> tuple[str, int]:
+def _extract_text_pypdf(pdf: Path) -> tuple[str, int, str | None, str | None, str | None]:
     if not _HAS_PYPDF:
-        return "", 0
+        return "", 0, None, None, None
     try:
         reader = PdfReader(str(pdf))
         pages = [(p.extract_text() or "") for p in reader.pages]
-        return "\n\n".join(pages), len(reader.pages)
+        metadata: dict[str, object] = dict(reader.metadata or {})
+        title = str(metadata.get("/Title") or "").strip() or None
+        author = str(metadata.get("/Author") or "").strip() or None
+        created = str(metadata.get("/CreationDate") or "").strip() or None
+        if created and created.startswith("D:"):
+            created = created[2:]
+        return "\n\n".join(pages), len(reader.pages), title, author, created
     except Exception as exc:  # noqa: BLE001
         logger.warning("pypdf text extraction failed for %s: %s", pdf, exc)
-        return "", 0
+        return "", 0, None, None, None
 
 
 def run_ocr(input_pdf: Path, output_pdf: Path, *, language: str = "eng") -> OcrResult:
@@ -92,8 +101,16 @@ def run_ocr(input_pdf: Path, output_pdf: Path, *, language: str = "eng") -> OcrR
                 if sidecar_txt.exists()
                 else ""
             )
-            _, page_count = _extract_text_pypdf(output_pdf)
-            return OcrResult(output_pdf, text, page_count, used_real_ocr=True)
+            _, page_count, title, author, source_created_at = _extract_text_pypdf(output_pdf)
+            return OcrResult(
+                output_pdf,
+                text,
+                page_count,
+                used_real_ocr=True,
+                title=title,
+                author=author,
+                source_created_at=source_created_at,
+            )
         except (FileNotFoundError, subprocess.SubprocessError) as exc:
             logger.warning("ocrmypdf invocation failed (%s); falling back to stub", exc)
         finally:
@@ -103,5 +120,25 @@ def run_ocr(input_pdf: Path, output_pdf: Path, *, language: str = "eng") -> OcrR
 
     # Stub path: copy + best-effort text extraction.
     shutil.copyfile(input_pdf, output_pdf)
-    text, pages = _extract_text_pypdf(output_pdf)
-    return OcrResult(output_pdf, text, pages, used_real_ocr=False)
+    text, pages, title, author, source_created_at = _extract_text_pypdf(output_pdf)
+    return OcrResult(
+        output_pdf,
+        text,
+        pages,
+        used_real_ocr=False,
+        title=title,
+        author=author,
+        source_created_at=source_created_at,
+    )
+
+
+def ocr_tool_status() -> dict[str, bool]:
+    tesseract_available = shutil.which("tesseract") is not None
+    ghostscript_available = shutil.which("gs") is not None or shutil.which("gswin64c") is not None
+    real_ocr_ready = _HAS_OCRMYPDF and tesseract_available and ghostscript_available
+    return {
+        "has_ocrmypdf_package": _HAS_OCRMYPDF,
+        "tesseract_available": tesseract_available,
+        "ghostscript_available": ghostscript_available,
+        "real_ocr_ready": real_ocr_ready,
+    }

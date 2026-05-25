@@ -182,7 +182,107 @@ def test_retry_done_document_returns_conflict(client: TestClient) -> None:
     assert r.status_code == 409
 
 
+def test_retry_non_retryable_document_returns_conflict(client: TestClient) -> None:
+    doc_id = client.app.state.db.upsert_pending("hash-non-retry", "C:/in/a.pdf", "a.pdf")
+    client.app.state.db.mark_failed(
+        doc_id, "missing dependency", category="ocr_missing_dependency", retryable=False
+    )
+
+    r = client.post(f"/documents/{doc_id}/retry")
+
+    assert r.status_code == 409
+    assert "non-retryable" in r.json()["detail"]
+
+
 def test_ollama_status_does_not_explode(client: TestClient) -> None:
     r = client.get("/ollama/status")
     assert r.status_code == 200
     assert "available" in r.json()
+
+
+def test_health_details_exposes_ocr_and_job_info(client: TestClient) -> None:
+    r = client.get("/health/details")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok"
+    assert "version" in body
+    assert "ocr" in body
+    assert "real_ocr_ready" in body["ocr"]
+
+
+def test_openapi_includes_health_and_recovery_contract(client: TestClient) -> None:
+    r = client.get("/openapi.json")
+    assert r.status_code == 200
+    body = r.json()
+    paths = body.get("paths", {})
+    assert "/health/details" in paths
+    assert "/recovery/clear-temp" in paths
+    assert "/recovery/retry-failed" in paths
+
+    schemas = body.get("components", {}).get("schemas", {})
+    assert "HealthDetailsResponse" in schemas
+    assert "OcrToolsStatus" in schemas
+    assert "ClearTempResponse" in schemas
+    assert "RetryFailedBatchResponse" in schemas
+
+
+def test_index_health_rebuild_and_optimize(client: TestClient) -> None:
+    doc_id = client.app.state.db.upsert_pending("hash-index", "C:/in/a.pdf", "a.pdf")
+    client.app.state.db.mark_done(
+        doc_id,
+        output_path="C:/out/a.pdf",
+        ai_name="Alpha",
+        page_count=2,
+        text="alpha",
+    )
+
+    health = client.get("/index/health")
+    assert health.status_code == 200
+    assert health.json()["done_total"] == 1
+    assert "missing_in_fts" in health.json()
+
+    rebuild = client.post("/index/rebuild")
+    assert rebuild.status_code == 200
+    assert rebuild.json()["rebuilt_rows"] >= 1
+
+    optimize = client.post("/maintenance/optimize")
+    assert optimize.status_code == 200
+    assert optimize.json()["optimized"] is True
+
+
+def test_recovery_clear_temp_removes_tmp_files(client: TestClient, tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "ocr_a.pdf.tmp").write_text("x", encoding="utf-8")
+    (out_dir / "nested").mkdir()
+    (out_dir / "nested" / "ocr_b.pdf.tmp").write_text("y", encoding="utf-8")
+    client.app.state.db.set_settings([("output_folder", str(out_dir))])
+
+    r = client.post("/recovery/clear-temp")
+
+    assert r.status_code == 200
+    assert r.json()["cleared"] == 2
+    assert not (out_dir / "ocr_a.pdf.tmp").exists()
+    assert not (out_dir / "nested" / "ocr_b.pdf.tmp").exists()
+
+
+def test_recovery_retry_failed_batch(client: TestClient, tmp_path: Path) -> None:
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"%PDF-1.1\n")
+    output = tmp_path / "out"
+    output.mkdir(parents=True, exist_ok=True)
+    client.app.state.db.set_settings([("output_folder", str(output))])
+
+    retryable_id = client.app.state.db.upsert_pending("hash-r-1", str(source), "r1.pdf")
+    client.app.state.db.mark_failed(retryable_id, "temporary")
+    non_retryable_id = client.app.state.db.upsert_pending("hash-r-2", str(source), "r2.pdf")
+    client.app.state.db.mark_failed(
+        non_retryable_id, "missing dep", category="ocr_missing_dependency", retryable=False
+    )
+
+    r = client.post("/recovery/retry-failed", params={"limit": 10})
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["queued"] >= 1
+    assert body["skipped_non_retryable"] >= 1

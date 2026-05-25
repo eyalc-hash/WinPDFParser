@@ -24,6 +24,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
+      - run: npm --workspace app run test -- tests/shared-types.test.ts
       - run: npm run test
 
   python:
@@ -45,4 +46,5 @@ jobs:
       - run: ruff check .
       - run: black --check .
       - run: mypy pdf_parser_sidecar
+      - run: pytest -q tests/test_app.py -k openapi_includes_health_and_recovery_contract
       - run: pytest -q

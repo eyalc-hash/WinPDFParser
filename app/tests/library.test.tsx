@@ -23,6 +23,7 @@ beforeEach(() => {
     openPath: vi.fn(),
     revealInFolder: vi.fn(),
     openAppDataFolder: vi.fn(),
+    exportDiagnostics: vi.fn(),
     viewer: {
       loadPdf: vi.fn(),
       clear: vi.fn(),
@@ -41,6 +42,12 @@ beforeEach(() => {
       getSettings: vi.fn(),
       putSettings: vi.fn(),
       ollamaStatus: vi.fn(),
+      healthDetails: vi.fn(),
+      getIndexHealth: vi.fn(),
+      rebuildIndex: vi.fn(),
+      optimizeIndex: vi.fn(),
+      clearTempFiles: vi.fn(),
+      retryFailedBatch: vi.fn(),
     },
   } as unknown as ElectronApi;
 });
@@ -80,6 +87,12 @@ function makeDocs(count: number): DocumentRow[] {
     processed_at: "2024-01-01T00:00:00Z",
     status: "done",
     error: null,
+    error_category: null,
+    retryable: true,
+    retry_count: 0,
+    title: null,
+    author: null,
+    source_created_at: null,
   }));
 }
 

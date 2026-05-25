@@ -8,6 +8,14 @@
 export type DocumentStatus = "pending" | "processing" | "done" | "failed" | "skipped";
 export type DocumentSort = "processed_desc" | "processed_asc" | "name_asc" | "pages_desc";
 export type JobState = "queued" | "running" | "done" | "cancelled" | "failed";
+export type SearchRank = "relevance" | "recent";
+export type FailureCategory =
+  | "ocr_missing_dependency"
+  | "file_locked"
+  | "pdf_parse_error"
+  | "model_unavailable"
+  | "filesystem_error"
+  | "unknown";
 
 export interface HealthResponse {
   status: "ok";
@@ -41,6 +49,12 @@ export interface DocumentRow {
   processed_at: string | null;
   status: DocumentStatus;
   error: string | null;
+  error_category: FailureCategory | null;
+  retryable: boolean;
+  retry_count: number;
+  title: string | null;
+  author: string | null;
+  source_created_at: string | null;
 }
 
 export interface DocumentList {
@@ -62,6 +76,10 @@ export interface SearchHit {
   output_path: string | null;
   snippet: string;
   score: number;
+  processed_at: string | null;
+  title: string | null;
+  author: string | null;
+  source_created_at: string | null;
 }
 
 export interface SearchResponse {
@@ -70,6 +88,15 @@ export interface SearchResponse {
   limit: number;
   offset: number;
   hits: SearchHit[];
+  rank: SearchRank;
+}
+
+export interface SearchOptions {
+  status?: DocumentStatus;
+  name?: string;
+  processed_after?: string;
+  processed_before?: string;
+  rank?: SearchRank;
 }
 
 export interface JobProgress {
@@ -104,12 +131,37 @@ export interface OllamaStatus {
   url: string;
 }
 
+export interface IndexHealth {
+  documents_total: number;
+  indexed_total: number;
+  done_total: number;
+  missing_in_fts: number;
+  orphaned_fts_rows: number;
+}
+
+export interface OcrToolsStatus {
+  has_ocrmypdf_package: boolean;
+  tesseract_available: boolean;
+  ghostscript_available: boolean;
+  real_ocr_ready: boolean;
+}
+
+export interface HealthDetails {
+  status: "ok";
+  version: string;
+  ollama_available: boolean;
+  active_jobs: number;
+  recent_jobs: number;
+  ocr: OcrToolsStatus;
+}
+
 /** Surface exposed by `preload` on `window.api`. */
 export interface ElectronApi {
   pickFolder: (kind: "input" | "output") => Promise<string | null>;
   openPath: (path: string) => Promise<void>;
   revealInFolder: (path: string) => Promise<void>;
   openAppDataFolder: () => Promise<void>;
+  exportDiagnostics: () => Promise<string>;
   viewer: {
     loadPdf: (path: string) => Promise<string | null>;
     clear: () => Promise<void>;
@@ -124,10 +176,21 @@ export interface ElectronApi {
     listFailedDocuments: (limit?: number) => Promise<DocumentList>;
     retryDocument: (id: number) => Promise<RetryAccepted>;
     deleteDocument: (id: number) => Promise<{ deleted: boolean }>;
-    search: (q: string, limit?: number, offset?: number) => Promise<SearchResponse>;
+    search: (q: string, limit?: number, offset?: number, options?: SearchOptions) => Promise<SearchResponse>;
     getSettings: () => Promise<SettingsModel>;
     putSettings: (s: SettingsModel) => Promise<SettingsModel>;
     ollamaStatus: () => Promise<OllamaStatus>;
+    healthDetails: () => Promise<HealthDetails>;
+    getIndexHealth: () => Promise<IndexHealth>;
+    rebuildIndex: () => Promise<{ rebuilt_rows: number }>;
+    optimizeIndex: () => Promise<{ optimized: boolean }>;
+    clearTempFiles: () => Promise<{ output_folder: string | null; cleared: number }>;
+    retryFailedBatch: (limit?: number) => Promise<{
+      queued: number;
+      skipped_non_retryable: number;
+      skipped_retry_limit: number;
+      job_ids: string[];
+    }>;
   };
 }
 

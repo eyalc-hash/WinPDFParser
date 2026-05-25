@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import type { JobProgress, ProcessRequest } from "@shared/types";
 import { Button } from "./ui/Button";
 
@@ -57,6 +57,22 @@ export function Processor({ onFinished }: Props): JSX.Element {
       });
     } catch {
       /* ignore: not fatal */
+    }
+  };
+
+  const dropFolder = async (kind: "input" | "output", droppedPath: string): Promise<void> => {
+    if (!droppedPath) return;
+    if (kind === "input") setInput(droppedPath);
+    else setOutput(droppedPath);
+    try {
+      const s = await window.api.sidecar.getSettings();
+      await window.api.sidecar.putSettings({
+        ...s,
+        input_folder: kind === "input" ? droppedPath : s.input_folder,
+        output_folder: kind === "output" ? droppedPath : s.output_folder,
+      });
+    } catch {
+      /* ignore */
     }
   };
 
@@ -121,8 +137,18 @@ export function Processor({ onFinished }: Props): JSX.Element {
   return (
     <section className="border-b border-border bg-card/40 px-4 py-3">
       <div className="flex flex-wrap items-center gap-3">
-        <FolderPicker label="Input" value={input} onPick={() => pick("input")} />
-        <FolderPicker label="Output" value={output} onPick={() => pick("output")} />
+        <FolderPicker
+          label="Input"
+          value={input}
+          onPick={() => pick("input")}
+          onDropPath={(path) => void dropFolder("input", path)}
+        />
+        <FolderPicker
+          label="Output"
+          value={output}
+          onPick={() => pick("output")}
+          onDropPath={(path) => void dropFolder("output", path)}
+        />
 
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           <input
@@ -180,19 +206,46 @@ function FolderPicker({
   label,
   value,
   onPick,
+  onDropPath,
 }: {
   label: string;
   value: string | null;
   onPick: () => void;
+  onDropPath: (path: string) => void;
 }): JSX.Element {
+  const [dragOver, setDragOver] = useState(false);
+  const onDrop = (event: DragEvent<HTMLButtonElement>): void => {
+    event.preventDefault();
+    setDragOver(false);
+    const file = event.dataTransfer.files?.[0] as (File & { path?: string }) | undefined;
+    const rawPath = file?.path?.trim();
+    if (!rawPath) return;
+    const normalized = rawPath.replace(/\\/g, "/");
+    if (normalized.toLowerCase().endsWith(".pdf")) {
+      const idx = Math.max(normalized.lastIndexOf("/"), normalized.lastIndexOf("\\"));
+      if (idx > 0) onDropPath(rawPath.slice(0, idx));
+      return;
+    }
+    onDropPath(rawPath);
+  };
+
   return (
     <div className="flex min-w-0 items-center gap-2">
       <span className="text-xs font-medium text-muted-foreground">{label}:</span>
       <button
         type="button"
         onClick={onPick}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
         title={value ?? "Choose a folder"}
-        className="max-w-[28ch] truncate rounded-md border border-border bg-background px-2 py-1 text-xs hover:bg-muted/50"
+        className={
+          "max-w-[28ch] truncate rounded-md border bg-background px-2 py-1 text-xs hover:bg-muted/50 " +
+          (dragOver ? "border-primary ring-1 ring-primary" : "border-border")
+        }
       >
         {value ?? "Choose…"}
       </button>

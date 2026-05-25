@@ -34,6 +34,7 @@ beforeEach(() => {
     openPath: vi.fn(),
     revealInFolder: vi.fn(),
     openAppDataFolder: vi.fn(),
+    exportDiagnostics: vi.fn().mockResolvedValue("C:/diag.json"),
     viewer: {
       loadPdf: vi.fn(),
       clear: vi.fn(),
@@ -52,6 +53,35 @@ beforeEach(() => {
       getSettings: vi.fn().mockResolvedValue(settings),
       putSettings: vi.fn().mockResolvedValue(settings),
       ollamaStatus: vi.fn().mockResolvedValue({ available: true, url: settings.ollama_url }),
+      healthDetails: vi.fn().mockResolvedValue({
+        status: "ok",
+        version: "0.1.0",
+        ollama_available: true,
+        active_jobs: 0,
+        recent_jobs: 1,
+        ocr: {
+          has_ocrmypdf_package: false,
+          tesseract_available: false,
+          ghostscript_available: false,
+          real_ocr_ready: false,
+        },
+      }),
+      getIndexHealth: vi.fn().mockResolvedValue({
+        documents_total: 2,
+        indexed_total: 2,
+        done_total: 2,
+        missing_in_fts: 0,
+        orphaned_fts_rows: 0,
+      }),
+      rebuildIndex: vi.fn().mockResolvedValue({ rebuilt_rows: 2 }),
+      optimizeIndex: vi.fn().mockResolvedValue({ optimized: true }),
+      clearTempFiles: vi.fn().mockResolvedValue({ output_folder: "C:/out", cleared: 3 }),
+      retryFailedBatch: vi.fn().mockResolvedValue({
+        queued: 2,
+        skipped_non_retryable: 0,
+        skipped_retry_limit: 0,
+        job_ids: ["a", "b"],
+      }),
     },
   } as unknown as ElectronApi;
 });
@@ -92,6 +122,12 @@ function makeFailures(): DocumentRow[] {
       processed_at: "2024-01-02T00:00:00Z",
       status: "failed",
       error: "OCR failed on page 1",
+      error_category: "unknown",
+      retryable: true,
+      retry_count: 0,
+      title: null,
+      author: null,
+      source_created_at: null,
     },
     {
       id: 10,
@@ -104,6 +140,12 @@ function makeFailures(): DocumentRow[] {
       processed_at: "2024-01-01T00:00:00Z",
       status: "failed",
       error: "Rename failed",
+      error_category: "unknown",
+      retryable: true,
+      retry_count: 0,
+      title: null,
+      author: null,
+      source_created_at: null,
     },
   ];
 }
@@ -130,6 +172,25 @@ describe("Settings recent failures", () => {
     await flushEffects();
 
     expect(retryDocument).toHaveBeenCalledWith(11);
+
+    await act(async () => root.unmount());
+  });
+
+  it("shows health details and runs recovery actions", async () => {
+    const root = await renderSettings();
+    expect(document.body.textContent).toContain("OCR tools:");
+
+    await act(async () => {
+      buttonsNamed("Clear temp files")[0].click();
+    });
+    await flushEffects();
+    expect(document.body.textContent).toContain("Cleared 3 temp file(s)");
+
+    await act(async () => {
+      buttonsNamed("Re-run failed batch")[0].click();
+    });
+    await flushEffects();
+    expect(document.body.textContent).toContain("Queued 2 retry job(s)");
 
     await act(async () => root.unmount());
   });

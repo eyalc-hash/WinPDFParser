@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { SearchHit, SearchResponse } from "@shared/types";
+import type { DocumentStatus, SearchHit, SearchRank, SearchResponse } from "@shared/types";
 import { Viewer } from "./Viewer";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
@@ -15,11 +15,23 @@ export function Search(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [viewerPaging, setViewerPaging] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<DocumentStatus | "all">("all");
+  const [nameFilter, setNameFilter] = useState("");
+  const [processedAfter, setProcessedAfter] = useState("");
+  const [processedBefore, setProcessedBefore] = useState("");
+  const [rank, setRank] = useState<SearchRank>("relevance");
+  const [savedSearches, setSavedSearches] = useState<Array<{ id: string; label: string; query: string }>>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const fetchSearch = async (query: string, offset = 0): Promise<SearchResponse> => {
     const trimmed = query.trim();
-    const res = await window.api.sidecar.search(trimmed, PAGE_SIZE, offset);
+    const res = await window.api.sidecar.search(trimmed, PAGE_SIZE, offset, {
+      status: statusFilter === "all" ? undefined : statusFilter,
+      name: nameFilter.trim() || undefined,
+      processed_after: processedAfter || undefined,
+      processed_before: processedBefore || undefined,
+      rank,
+    });
     setActiveQuery(trimmed);
     return res;
   };
@@ -44,6 +56,15 @@ export function Search(): JSX.Element {
     await executeSearch(q, 0);
   };
 
+  const saveSearch = (): void => {
+    const trimmed = q.trim();
+    if (!trimmed) return;
+    const id = `${Date.now()}`;
+    const next = [{ id, label: trimmed, query: trimmed }, ...savedSearches].slice(0, 10);
+    setSavedSearches(next);
+    window.localStorage.setItem("saved-searches", JSON.stringify(next));
+  };
+
   useEffect(() => {
     if (!result || result.hits.length === 0) {
       setActiveResultIndex(0);
@@ -51,6 +72,15 @@ export function Search(): JSX.Element {
     }
     setActiveResultIndex((current) => Math.min(current, result.hits.length - 1));
   }, [result]);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("saved-searches");
+      if (raw) setSavedSearches(JSON.parse(raw) as Array<{ id: string; label: string; query: string }>);
+    } catch {
+      /* ignore malformed storage */
+    }
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -155,7 +185,73 @@ export function Search(): JSX.Element {
         <Button variant="primary" type="submit" disabled={loading}>
           {loading ? "…" : "Search"}
         </Button>
+        <Button variant="ghost" type="button" onClick={saveSearch}>
+          Save search
+        </Button>
       </form>
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2 text-xs">
+        <select
+          aria-label="Filter search by document status"
+          className="h-8 rounded-md border border-border bg-background px-2"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as DocumentStatus | "all")}
+        >
+          <option value="all">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="processing">Processing</option>
+          <option value="done">Done</option>
+          <option value="failed">Failed</option>
+          <option value="skipped">Skipped</option>
+        </select>
+        <Input
+          value={nameFilter}
+          onChange={(e) => setNameFilter(e.target.value)}
+          placeholder="Name contains"
+          aria-label="Filter by document name"
+          className="h-8 w-40"
+        />
+        <Input
+          type="date"
+          value={processedAfter}
+          onChange={(e) => setProcessedAfter(e.target.value)}
+          aria-label="Processed after"
+          className="h-8 w-36"
+        />
+        <Input
+          type="date"
+          value={processedBefore}
+          onChange={(e) => setProcessedBefore(e.target.value)}
+          aria-label="Processed before"
+          className="h-8 w-36"
+        />
+        <select
+          aria-label="Search ranking"
+          className="h-8 rounded-md border border-border bg-background px-2"
+          value={rank}
+          onChange={(e) => setRank(e.target.value as SearchRank)}
+        >
+          <option value="relevance">Relevance</option>
+          <option value="recent">Recent</option>
+        </select>
+        {savedSearches.length > 0 ? (
+          <div className="ml-auto flex items-center gap-1">
+            <span className="text-muted-foreground">Saved:</span>
+            {savedSearches.map((saved) => (
+              <button
+                key={saved.id}
+                type="button"
+                className="rounded border border-border px-2 py-1 hover:bg-muted/40"
+                onClick={() => {
+                  setQ(saved.query);
+                  void executeSearch(saved.query, 0);
+                }}
+              >
+                {saved.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       <div className="flex-1 overflow-auto px-4 py-3">
         {result ? (
@@ -163,7 +259,7 @@ export function Search(): JSX.Element {
             <span>
               {result.total === 0
                 ? `No matches for “${result.query}”.`
-                : `Showing ${showingFrom}–${showingTo} of ${result.total} matches for “${result.query}”.`}
+                : `Showing ${showingFrom}–${showingTo} of ${result.total} matches for “${result.query}” (${result.rank}).`}
             </span>
             <div className="flex gap-2">
               <Button
@@ -288,6 +384,13 @@ function Hit({
         </div>
       </header>
       <p className="text-xs text-muted-foreground">{hit.original_name}</p>
+      {hit.title || hit.author || hit.source_created_at ? (
+        <p className="text-[11px] text-muted-foreground">
+          {[hit.title ? `Title: ${hit.title}` : null, hit.author ? `Author: ${hit.author}` : null, hit.source_created_at ? `Created: ${hit.source_created_at}` : null]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      ) : null}
       <p className="mt-2 text-sm leading-relaxed">{segments}</p>
     </article>
   );

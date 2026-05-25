@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
+import subprocess
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -83,6 +85,7 @@ class JobManager:
         self._max_concurrent_jobs = max(1, config.max_concurrent_jobs)
         self._semaphore = asyncio.Semaphore(self._max_concurrent_jobs)
         self._lock = asyncio.Lock()
+        self._queue_settings_key = "__queue_state__"
 
     # -- public API ---------------------------------------------------------
 
@@ -121,6 +124,10 @@ class JobManager:
         document = self.db.get_document(document_id)
         if document is None:
             raise FileNotFoundError("document not found")
+        if not document.retryable:
+            raise ValueError("document is marked as non-retryable")
+        if document.retry_count >= 3:
+            raise ValueError("retry limit reached for this document")
         output_folder = self.db.get_setting("output_folder")
         if not output_folder:
             raise ValueError("no output folder configured, run a batch first")
@@ -144,6 +151,7 @@ class JobManager:
         state.cancelled = True
         if state.task and not state.task.done():
             state.task.cancel()
+        self._persist_queue_state()
         return True
 
     def snapshot(self, job_id: str) -> JobProgress | None:
@@ -165,6 +173,62 @@ class JobManager:
         for t in tasks:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await t
+        self._persist_queue_state()
+
+    async def restore_pending(self) -> int:
+        """Restore queued/running jobs persisted before a restart."""
+        raw = self.db.get_setting(self._queue_settings_key)
+        if not raw:
+            return 0
+        try:
+            payload = json.loads(raw)
+        except ValueError:
+            return 0
+        if not isinstance(payload, list):
+            return 0
+
+        restored = 0
+        async with self._lock:
+            for entry in payload:
+                if not isinstance(entry, dict):
+                    continue
+                job_id = str(entry.get("job_id") or "")
+                if not job_id or job_id in self._jobs:
+                    continue
+                files_raw = entry.get("files")
+                if not isinstance(files_raw, list):
+                    continue
+                files = [Path(str(item)) for item in files_raw if str(item).strip()]
+                if not files:
+                    continue
+                output_folder_raw = str(entry.get("output_folder") or "").strip()
+                if not output_folder_raw:
+                    continue
+                try:
+                    progress = JobProgress(**dict(entry.get("progress") or {}))
+                except Exception:  # noqa: BLE001
+                    continue
+                progress.job_id = job_id
+                progress.state = "queued"
+                progress.current_file = None
+                progress.finished_at = None
+                state = _JobState(
+                    job_id=job_id,
+                    files=files,
+                    force=bool(entry.get("force", False)),
+                    rename_with_llm=bool(entry.get("rename_with_llm", True)),
+                    ocr_language=str(entry.get("ocr_language") or "eng"),
+                    output_folder=Path(output_folder_raw),
+                    model=str(entry.get("model") or self.config.default_model),
+                    progress=progress,
+                )
+                self._jobs[job_id] = state
+                self.db.upsert_job(progress)
+                state.task = asyncio.create_task(self._run_job(state))
+                restored += 1
+
+        self._persist_queue_state()
+        return restored
 
     # -- internals ----------------------------------------------------------
 
@@ -205,6 +269,7 @@ class JobManager:
         async with self._lock:
             self._jobs[job_id] = state
         self.db.upsert_job(progress)
+        self._persist_queue_state()
         state.task = asyncio.create_task(self._run_job(state))
         return job_id, len(files)
 
@@ -213,6 +278,7 @@ class JobManager:
             state.progress.state = "running"
             state.progress.started_at = datetime.now(UTC)
             self.db.upsert_job(state.progress)
+            self._persist_queue_state()
 
             for pdf in state.files:
                 if state.cancelled:
@@ -220,12 +286,14 @@ class JobManager:
                     break
                 state.progress.current_file = pdf.name
                 self.db.upsert_job(state.progress)
+                self._persist_queue_state()
                 try:
                     await asyncio.to_thread(self._process_one, state, pdf)
                 except Exception as exc:  # noqa: BLE001
                     logger.exception("processing failed for %s", pdf)
                     state.progress.failed += 1
                     self.db.upsert_job(state.progress)
+                    self._persist_queue_state()
                     _ = exc
 
             if state.progress.state != "cancelled":
@@ -233,12 +301,14 @@ class JobManager:
             state.progress.current_file = None
             state.progress.finished_at = datetime.now(UTC)
             self.db.upsert_job(state.progress)
+            self._persist_queue_state()
 
     def _process_one(self, state: _JobState, pdf: Path) -> None:
         content_hash = sha256_of_file(pdf)
         existing = self.db.get_by_hash(content_hash)
         if existing and existing.status == "done" and not state.force:
             state.progress.skipped += 1
+            self.db.mark_skipped(existing.id)
             return
 
         document_id = self.db.upsert_pending(content_hash, str(pdf), pdf.name)
@@ -278,10 +348,14 @@ class JobManager:
                 ai_name=final_stem,
                 page_count=ocr_result.page_count,
                 text=ocr_result.text,
+                title=ocr_result.title,
+                author=ocr_result.author,
+                source_created_at=ocr_result.source_created_at,
             )
             state.progress.processed += 1
         except Exception as exc:  # noqa: BLE001
-            self.db.mark_failed(document_id, repr(exc))
+            category, retryable = _classify_failure(exc)
+            self.db.mark_failed(document_id, repr(exc), category=category, retryable=retryable)
             raise
 
     def _apply_runtime_concurrency_limit(self, requested: int) -> None:
@@ -291,6 +365,25 @@ class JobManager:
         self._max_concurrent_jobs = safe
         self._semaphore = asyncio.Semaphore(safe)
 
+    def _persist_queue_state(self) -> None:
+        pending = []
+        for state in self._jobs.values():
+            if state.progress.state not in ("queued", "running"):
+                continue
+            pending.append(
+                {
+                    "job_id": state.job_id,
+                    "files": [str(path) for path in state.files],
+                    "force": state.force,
+                    "rename_with_llm": state.rename_with_llm,
+                    "ocr_language": state.ocr_language,
+                    "output_folder": str(state.output_folder),
+                    "model": state.model,
+                    "progress": state.progress.model_dump(mode="json"),
+                }
+            )
+        self.db.set_settings([(self._queue_settings_key, json.dumps(pending))])
+
 
 def reconcile_on_startup(db: Database) -> int:
     """Mark any 'processing' rows as failed since the previous run crashed."""
@@ -298,3 +391,20 @@ def reconcile_on_startup(db: Database) -> int:
 
 
 __all__ = ["JobManager", "reconcile_on_startup"]
+
+
+def _classify_failure(exc: Exception) -> tuple[str, bool]:
+    text = f"{type(exc).__name__}: {exc}".lower()
+    if isinstance(exc, (FileNotFoundError, subprocess.SubprocessError)) and (
+        "tesseract" in text or "ghostscript" in text or "ocrmypdf" in text
+    ):
+        return "ocr_missing_dependency", False
+    if isinstance(exc, PermissionError):
+        return "file_locked", True
+    if "pdf" in text and ("parse" in text or "invalid" in text):
+        return "pdf_parse_error", False
+    if "ollama" in text or "httpx" in text or "connection refused" in text or "timed out" in text:
+        return "model_unavailable", True
+    if isinstance(exc, OSError):
+        return "filesystem_error", True
+    return "unknown", True

@@ -17,7 +17,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from .models import DocumentRow, DocumentSort, DocumentStatus, JobProgress, SearchHit
+from .models import DocumentRow, DocumentSort, DocumentStatus, JobProgress, SearchHit, SearchRank
 
 
 def _utcnow_iso() -> str:
@@ -129,14 +129,27 @@ class Database:
         ai_name: str | None,
         page_count: int | None,
         text: str,
+        title: str | None = None,
+        author: str | None = None,
+        source_created_at: str | None = None,
     ) -> None:
         with self._lock:
             self._conn.execute("BEGIN")
             try:
                 self._conn.execute(
                     "UPDATE documents SET output_path = ?, ai_name = ?, page_count = ?, "
-                    "processed_at = ?, status = 'done', error = NULL WHERE id = ?",
-                    (output_path, ai_name, page_count, _utcnow_iso(), document_id),
+                    "title = ?, author = ?, source_created_at = ?, processed_at = ?, "
+                    "status = 'done', error = NULL, error_category = NULL, retryable = 1 WHERE id = ?",
+                    (
+                        output_path,
+                        ai_name,
+                        page_count,
+                        title,
+                        author,
+                        source_created_at,
+                        _utcnow_iso(),
+                        document_id,
+                    ),
                 )
                 self._conn.execute("DELETE FROM documents_fts WHERE rowid = ?", (document_id,))
                 self._conn.execute(
@@ -148,17 +161,26 @@ class Database:
                 self._conn.execute("ROLLBACK")
                 raise
 
-    def mark_failed(self, document_id: int, error: str) -> None:
+    def mark_failed(
+        self,
+        document_id: int,
+        error: str,
+        *,
+        category: str = "unknown",
+        retryable: bool = True,
+    ) -> None:
         with self._lock:
             self._conn.execute(
-                "UPDATE documents SET status = 'failed', error = ?, processed_at = ? WHERE id = ?",
-                (error, _utcnow_iso(), document_id),
+                "UPDATE documents SET status = 'failed', error = ?, error_category = ?, "
+                "retryable = ?, processed_at = ? WHERE id = ?",
+                (error, category, 1 if retryable else 0, _utcnow_iso(), document_id),
             )
 
     def mark_retry_pending(self, document_id: int) -> None:
         with self._lock:
             self._conn.execute(
-                "UPDATE documents SET status = 'pending', error = NULL WHERE id = ?",
+                "UPDATE documents SET status = 'pending', error = NULL, error_category = NULL, "
+                "retry_count = retry_count + 1 WHERE id = ?",
                 (document_id,),
             )
 
@@ -224,26 +246,59 @@ class Database:
 
     # -- search -------------------------------------------------------------
 
-    def search(self, query: str, limit: int = 50, offset: int = 0) -> tuple[list[SearchHit], int]:
+    def search(
+        self,
+        query: str,
+        limit: int = 50,
+        offset: int = 0,
+        *,
+        status: DocumentStatus | None = None,
+        name: str | None = None,
+        processed_after: str | None = None,
+        processed_before: str | None = None,
+        rank: SearchRank = "relevance",
+    ) -> tuple[list[SearchHit], int]:
         if not query.strip():
             return [], 0
+        filters = ["documents_fts MATCH ?"]
+        params: list[object] = [query]
+        if status:
+            filters.append("d.status = ?")
+            params.append(status)
+        if name:
+            filters.append("LOWER(COALESCE(NULLIF(d.ai_name, ''), d.original_name)) LIKE ?")
+            params.append(f"%{name.lower()}%")
+        if processed_after:
+            filters.append("d.processed_at >= ?")
+            params.append(processed_after)
+        if processed_before:
+            filters.append("d.processed_at <= ?")
+            params.append(processed_before)
+        where = " AND ".join(filters)
+        order_by = (
+            "d.processed_at IS NULL ASC, d.processed_at DESC, d.id DESC"
+            if rank == "recent"
+            else "score, d.id DESC"
+        )
         with self._lock:
             total = int(
                 self._conn.execute(
-                    "SELECT COUNT(*) AS c FROM documents_fts WHERE documents_fts MATCH ?",
-                    (query,),
+                    "SELECT COUNT(*) AS c FROM documents_fts "
+                    "JOIN documents d ON d.id = documents_fts.rowid "
+                    f"WHERE {where}",
+                    tuple(params),
                 ).fetchone()["c"]
             )
             rows = self._conn.execute(
                 "SELECT d.id AS document_id, d.original_name, d.ai_name, d.output_path, "
                 "snippet(documents_fts, 0, '[[', ']]', '…', 12) AS snippet, "
-                "bm25(documents_fts) AS score "
+                "bm25(documents_fts) AS score, d.processed_at, d.title, d.author, d.source_created_at "
                 "FROM documents_fts "
                 "JOIN documents d ON d.id = documents_fts.rowid "
-                "WHERE documents_fts MATCH ? "
-                "ORDER BY score, d.id DESC "
+                f"WHERE {where} "
+                f"ORDER BY {order_by} "
                 "LIMIT ? OFFSET ?",
-                (query, limit, offset),
+                (*params, limit, offset),
             ).fetchall()
         return (
             [
@@ -255,11 +310,76 @@ class Database:
                     snippet=r["snippet"],
                     # bm25 returns a lower-is-better score; invert for UX
                     score=-float(r["score"]),
+                    processed_at=(
+                        datetime.fromisoformat(r["processed_at"]) if r["processed_at"] else None
+                    ),
+                    title=r["title"],
+                    author=r["author"],
+                    source_created_at=(
+                        datetime.fromisoformat(r["source_created_at"])
+                        if r["source_created_at"]
+                        else None
+                    ),
                 )
                 for r in rows
             ],
             total,
         )
+
+    def index_health(self) -> dict[str, int]:
+        with self._lock:
+            documents_total = int(
+                self._conn.execute("SELECT COUNT(*) AS c FROM documents").fetchone()["c"]
+            )
+            done_total = int(
+                self._conn.execute(
+                    "SELECT COUNT(*) AS c FROM documents WHERE status = 'done'"
+                ).fetchone()["c"]
+            )
+            indexed_total = int(
+                self._conn.execute("SELECT COUNT(*) AS c FROM documents_fts").fetchone()["c"]
+            )
+            missing_in_fts = int(
+                self._conn.execute(
+                    "SELECT COUNT(*) AS c FROM documents d "
+                    "WHERE d.status='done' AND NOT EXISTS("
+                    "SELECT 1 FROM documents_fts f WHERE f.rowid=d.id)"
+                ).fetchone()["c"]
+            )
+            orphaned_fts_rows = int(
+                self._conn.execute(
+                    "SELECT COUNT(*) AS c FROM documents_fts f "
+                    "LEFT JOIN documents d ON d.id=f.rowid "
+                    "WHERE d.id IS NULL"
+                ).fetchone()["c"]
+            )
+        return {
+            "documents_total": documents_total,
+            "done_total": done_total,
+            "indexed_total": indexed_total,
+            "missing_in_fts": missing_in_fts,
+            "orphaned_fts_rows": orphaned_fts_rows,
+        }
+
+    def rebuild_index(self) -> int:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT d.id, f.body FROM documents d "
+                "JOIN documents_fts f ON f.rowid = d.id "
+                "WHERE d.status = 'done'"
+            ).fetchall()
+            self._conn.execute("DELETE FROM documents_fts")
+            self._conn.executemany(
+                "INSERT INTO documents_fts(rowid, body) VALUES (?, ?)",
+                [(r["id"], r["body"]) for r in rows],
+            )
+        return len(rows)
+
+    def optimize(self) -> None:
+        with self._lock:
+            self._conn.execute("ANALYZE")
+            self._conn.execute("REINDEX")
+            self._conn.execute("VACUUM")
 
     # -- settings -----------------------------------------------------------
 
@@ -322,19 +442,30 @@ class Database:
 
 
 def _row_to_document(row: sqlite3.Row) -> DocumentRow:
-    processed_at_raw: Any = row["processed_at"]
+    data = dict(row)
+    processed_at_raw: Any = data["processed_at"]
     processed_at = datetime.fromisoformat(processed_at_raw) if processed_at_raw else None
+    source_created_at_raw: Any = data.get("source_created_at")
+    source_created_at = (
+        datetime.fromisoformat(source_created_at_raw) if source_created_at_raw else None
+    )
     return DocumentRow(
-        id=row["id"],
-        content_hash=row["content_hash"],
-        original_path=row["original_path"],
-        output_path=row["output_path"],
-        original_name=row["original_name"],
-        ai_name=row["ai_name"],
-        page_count=row["page_count"],
+        id=data["id"],
+        content_hash=data["content_hash"],
+        original_path=data["original_path"],
+        output_path=data["output_path"],
+        original_name=data["original_name"],
+        ai_name=data["ai_name"],
+        page_count=data["page_count"],
         processed_at=processed_at,
-        status=row["status"],
-        error=row["error"],
+        status=data["status"],
+        error=data["error"],
+        error_category=data.get("error_category"),
+        retryable=bool(data.get("retryable", True)),
+        retry_count=int(data.get("retry_count", 0)),
+        title=data.get("title"),
+        author=data.get("author"),
+        source_created_at=source_created_at,
     )
 
 
