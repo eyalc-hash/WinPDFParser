@@ -184,7 +184,9 @@ def test_retry_done_document_returns_conflict(client: TestClient) -> None:
 
 def test_retry_non_retryable_document_returns_conflict(client: TestClient) -> None:
     doc_id = client.app.state.db.upsert_pending("hash-non-retry", "C:/in/a.pdf", "a.pdf")
-    client.app.state.db.mark_failed(doc_id, "missing dependency", category="ocr_missing_dependency", retryable=False)
+    client.app.state.db.mark_failed(
+        doc_id, "missing dependency", category="ocr_missing_dependency", retryable=False
+    )
 
     r = client.post(f"/documents/{doc_id}/retry")
 

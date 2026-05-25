@@ -64,7 +64,7 @@ def _extract_text_pypdf(pdf: Path) -> tuple[str, int, str | None, str | None, st
     try:
         reader = PdfReader(str(pdf))
         pages = [(p.extract_text() or "") for p in reader.pages]
-        metadata = reader.metadata or {}
+        metadata: dict[str, object] = dict(reader.metadata or {})
         title = str(metadata.get("/Title") or "").strip() or None
         author = str(metadata.get("/Author") or "").strip() or None
         created = str(metadata.get("/CreationDate") or "").strip() or None

@@ -310,11 +310,15 @@ class Database:
                     snippet=r["snippet"],
                     # bm25 returns a lower-is-better score; invert for UX
                     score=-float(r["score"]),
-                    processed_at=datetime.fromisoformat(r["processed_at"]) if r["processed_at"] else None,
+                    processed_at=(
+                        datetime.fromisoformat(r["processed_at"]) if r["processed_at"] else None
+                    ),
                     title=r["title"],
                     author=r["author"],
                     source_created_at=(
-                        datetime.fromisoformat(r["source_created_at"]) if r["source_created_at"] else None
+                        datetime.fromisoformat(r["source_created_at"])
+                        if r["source_created_at"]
+                        else None
                     ),
                 )
                 for r in rows
@@ -324,9 +328,13 @@ class Database:
 
     def index_health(self) -> dict[str, int]:
         with self._lock:
-            documents_total = int(self._conn.execute("SELECT COUNT(*) AS c FROM documents").fetchone()["c"])
+            documents_total = int(
+                self._conn.execute("SELECT COUNT(*) AS c FROM documents").fetchone()["c"]
+            )
             done_total = int(
-                self._conn.execute("SELECT COUNT(*) AS c FROM documents WHERE status = 'done'").fetchone()["c"]
+                self._conn.execute(
+                    "SELECT COUNT(*) AS c FROM documents WHERE status = 'done'"
+                ).fetchone()["c"]
             )
             indexed_total = int(
                 self._conn.execute("SELECT COUNT(*) AS c FROM documents_fts").fetchone()["c"]
@@ -434,28 +442,29 @@ class Database:
 
 
 def _row_to_document(row: sqlite3.Row) -> DocumentRow:
-    processed_at_raw: Any = row["processed_at"]
+    data = dict(row)
+    processed_at_raw: Any = data["processed_at"]
     processed_at = datetime.fromisoformat(processed_at_raw) if processed_at_raw else None
-    source_created_at_raw: Any = row["source_created_at"] if "source_created_at" in row.keys() else None
+    source_created_at_raw: Any = data.get("source_created_at")
     source_created_at = (
         datetime.fromisoformat(source_created_at_raw) if source_created_at_raw else None
     )
     return DocumentRow(
-        id=row["id"],
-        content_hash=row["content_hash"],
-        original_path=row["original_path"],
-        output_path=row["output_path"],
-        original_name=row["original_name"],
-        ai_name=row["ai_name"],
-        page_count=row["page_count"],
+        id=data["id"],
+        content_hash=data["content_hash"],
+        original_path=data["original_path"],
+        output_path=data["output_path"],
+        original_name=data["original_name"],
+        ai_name=data["ai_name"],
+        page_count=data["page_count"],
         processed_at=processed_at,
-        status=row["status"],
-        error=row["error"],
-        error_category=row["error_category"] if "error_category" in row.keys() else None,
-        retryable=bool(row["retryable"]) if "retryable" in row.keys() else True,
-        retry_count=int(row["retry_count"]) if "retry_count" in row.keys() else 0,
-        title=row["title"] if "title" in row.keys() else None,
-        author=row["author"] if "author" in row.keys() else None,
+        status=data["status"],
+        error=data["error"],
+        error_category=data.get("error_category"),
+        retryable=bool(data.get("retryable", True)),
+        retry_count=int(data.get("retry_count", 0)),
+        title=data.get("title"),
+        author=data.get("author"),
         source_created_at=source_created_at,
     )
 

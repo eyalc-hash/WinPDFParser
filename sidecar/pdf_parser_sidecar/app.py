@@ -186,7 +186,9 @@ def create_app(config: Config) -> FastAPI:
         except Exception as exc:  # noqa: BLE001
             # Bad FTS5 syntax shouldn't 500 the UI.
             raise HTTPException(status_code=400, detail=f"bad query: {exc}") from exc
-        return SearchResponse(query=q, total=total, limit=limit, offset=offset, hits=hits, rank=rank)
+        return SearchResponse(
+            query=q, total=total, limit=limit, offset=offset, hits=hits, rank=rank
+        )
 
     # ---- settings ---------------------------------------------------------
 

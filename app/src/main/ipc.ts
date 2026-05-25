@@ -81,53 +81,6 @@ export function registerIpcHandlers(sidecar: SidecarManager): void {
       currentViewerPdfPath = null;
       return null;
     }
-
-    async function exportDiagnostics(sidecar: SidecarManager): Promise<string> {
-      const userData = app.getPath("userData");
-      const logsDir = path.join(userData, "logs");
-      await mkdir(logsDir, { recursive: true });
-      const now = new Date().toISOString().replace(/[:.]/g, "-");
-      const outPath = path.join(logsDir, `diagnostics-${now}.json`);
-
-      let sidecarHealth: SidecarResponse | null = null;
-      try {
-        sidecarHealth = await proxyToSidecar(sidecar, { method: "GET", path: "/health" });
-      } catch {
-        sidecarHealth = null;
-      }
-
-      const lastLogPath = path.join(logsDir, "sidecar.log");
-      let tailLog: string | null = null;
-      try {
-        const content = await readFile(lastLogPath, "utf8");
-        tailLog = content.split("\n").slice(-200).join("\n");
-      } catch {
-        tailLog = null;
-      }
-
-      const payload = {
-        generated_at: new Date().toISOString(),
-        platform: process.platform,
-        arch: process.arch,
-        os_release: os.release(),
-        app_version: app.getVersion(),
-        electron_version: process.versions.electron,
-        chrome_version: process.versions.chrome,
-        node_version: process.version,
-        user_data: userData,
-        sidecar_base_url: (() => {
-          try {
-            return sidecar.baseUrl;
-          } catch {
-            return null;
-          }
-        })(),
-        sidecar_health: sidecarHealth,
-        sidecar_log_tail: tailLog,
-      };
-      await writeFile(outPath, JSON.stringify(payload, null, 2), "utf8");
-      return outPath;
-    }
     currentViewerPdfPath = safePath;
     return `${VIEWER_URL_BASE}?v=${Date.now()}`;
   });
@@ -139,6 +92,53 @@ export function registerIpcHandlers(sidecar: SidecarManager): void {
   ipcMain.handle(IPC.Sidecar, async (_e, req: SidecarRequest): Promise<SidecarResponse> => {
     return proxyToSidecar(sidecar, req);
   });
+}
+
+async function exportDiagnostics(sidecar: SidecarManager): Promise<string> {
+  const userData = app.getPath("userData");
+  const logsDir = path.join(userData, "logs");
+  await mkdir(logsDir, { recursive: true });
+  const now = new Date().toISOString().replace(/[:.]/g, "-");
+  const outPath = path.join(logsDir, `diagnostics-${now}.json`);
+
+  let sidecarHealth: SidecarResponse | null = null;
+  try {
+    sidecarHealth = await proxyToSidecar(sidecar, { method: "GET", path: "/health" });
+  } catch {
+    sidecarHealth = null;
+  }
+
+  const lastLogPath = path.join(logsDir, "sidecar.log");
+  let tailLog: string | null = null;
+  try {
+    const content = await readFile(lastLogPath, "utf8");
+    tailLog = content.split("\n").slice(-200).join("\n");
+  } catch {
+    tailLog = null;
+  }
+
+  const payload = {
+    generated_at: new Date().toISOString(),
+    platform: process.platform,
+    arch: process.arch,
+    os_release: os.release(),
+    app_version: app.getVersion(),
+    electron_version: process.versions.electron,
+    chrome_version: process.versions.chrome,
+    node_version: process.version,
+    user_data: userData,
+    sidecar_base_url: (() => {
+      try {
+        return sidecar.baseUrl;
+      } catch {
+        return null;
+      }
+    })(),
+    sidecar_health: sidecarHealth,
+    sidecar_log_tail: tailLog,
+  };
+  await writeFile(outPath, JSON.stringify(payload, null, 2), "utf8");
+  return outPath;
 }
 
 async function validateViewerPdfPath(
