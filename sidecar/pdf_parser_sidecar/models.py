@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 DocumentStatus = Literal["pending", "processing", "done", "failed", "skipped"]
+DocumentSort = Literal["processed_desc", "processed_asc", "name_asc", "pages_desc"]
 
 
 class HealthResponse(BaseModel):
@@ -25,6 +26,10 @@ class ProcessRequest(BaseModel):
 class ProcessAccepted(BaseModel):
     job_id: str
     file_count: int
+
+
+class RetryAccepted(BaseModel):
+    job_id: str
 
 
 class DocumentRow(BaseModel):

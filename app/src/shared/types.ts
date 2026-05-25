@@ -6,6 +6,7 @@
  */
 
 export type DocumentStatus = "pending" | "processing" | "done" | "failed" | "skipped";
+export type DocumentSort = "processed_desc" | "processed_asc" | "name_asc" | "pages_desc";
 export type JobState = "queued" | "running" | "done" | "cancelled" | "failed";
 
 export interface HealthResponse {
@@ -25,6 +26,10 @@ export interface ProcessAccepted {
   file_count: number;
 }
 
+export interface RetryAccepted {
+  job_id: string;
+}
+
 export interface DocumentRow {
   id: number;
   content_hash: string;
@@ -41,6 +46,13 @@ export interface DocumentRow {
 export interface DocumentList {
   items: DocumentRow[];
   total: number;
+}
+
+export interface DocumentListOptions {
+  limit?: number;
+  offset?: number;
+  status?: DocumentStatus;
+  sort?: DocumentSort;
 }
 
 export interface SearchHit {
@@ -96,13 +108,19 @@ export interface ElectronApi {
   openPath: (path: string) => Promise<void>;
   revealInFolder: (path: string) => Promise<void>;
   openAppDataFolder: () => Promise<void>;
+  viewer: {
+    loadPdf: (path: string) => Promise<string | null>;
+    clear: () => Promise<void>;
+  };
   sidecar: {
     health: () => Promise<HealthResponse>;
     process: (req: ProcessRequest) => Promise<ProcessAccepted>;
     listJobs: () => Promise<JobList>;
     getJob: (id: string) => Promise<JobProgress>;
     cancelJob: (id: string) => Promise<{ cancelled: boolean }>;
-    listDocuments: (limit?: number, offset?: number) => Promise<DocumentList>;
+    listDocuments: (options?: DocumentListOptions) => Promise<DocumentList>;
+    listFailedDocuments: (limit?: number) => Promise<DocumentList>;
+    retryDocument: (id: number) => Promise<RetryAccepted>;
     deleteDocument: (id: number) => Promise<{ deleted: boolean }>;
     search: (q: string, limit?: number, offset?: number) => Promise<SearchResponse>;
     getSettings: () => Promise<SettingsModel>;

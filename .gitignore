@@ -10,6 +10,13 @@ pnpm-debug.log*
 dist/
 out/
 build/
+!app/build/
+!app/build/icon.ico
+!app/build/installerIcon.ico
+!app/build/uninstallerIcon.ico
+!app/build/installerHeader.bmp
+!app/build/installerSidebar.bmp
+!app/build/LICENSE.txt
 release/
 *.tsbuildinfo
 .vite/

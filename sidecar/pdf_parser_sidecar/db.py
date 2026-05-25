@@ -17,7 +17,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from .models import DocumentRow, DocumentStatus, JobProgress, SearchHit
+from .models import DocumentRow, DocumentSort, DocumentStatus, JobProgress, SearchHit
 
 
 def _utcnow_iso() -> str:
@@ -93,6 +93,13 @@ class Database:
             ).fetchone()
         return _row_to_document(row) if row else None
 
+    def get_document(self, document_id: int) -> DocumentRow | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM documents WHERE id = ?", (document_id,)
+            ).fetchone()
+        return _row_to_document(row) if row else None
+
     def upsert_pending(self, content_hash: str, original_path: str, original_name: str) -> int:
         with self._lock:
             existing = self._conn.execute(
@@ -148,6 +155,13 @@ class Database:
                 (error, _utcnow_iso(), document_id),
             )
 
+    def mark_retry_pending(self, document_id: int) -> None:
+        with self._lock:
+            self._conn.execute(
+                "UPDATE documents SET status = 'pending', error = NULL WHERE id = ?",
+                (document_id,),
+            )
+
     def mark_skipped(self, document_id: int) -> None:
         with self._lock:
             self._conn.execute(
@@ -155,13 +169,36 @@ class Database:
                 (_utcnow_iso(), document_id),
             )
 
-    def list_documents(self, limit: int = 200, offset: int = 0) -> tuple[list[DocumentRow], int]:
+    def list_documents(
+        self,
+        limit: int = 200,
+        offset: int = 0,
+        *,
+        status: DocumentStatus | None = None,
+        sort: DocumentSort = "processed_desc",
+    ) -> tuple[list[DocumentRow], int]:
+        order_by = {
+            "processed_desc": "processed_at IS NULL ASC, processed_at DESC, id DESC",
+            "processed_asc": "processed_at IS NULL ASC, processed_at ASC, id ASC",
+            "name_asc": "LOWER(COALESCE(NULLIF(ai_name, ''), original_name)) ASC, id ASC",
+            "pages_desc": "page_count IS NULL ASC, page_count DESC, id DESC",
+        }.get(sort)
+        if order_by is None:
+            raise ValueError(f"unsupported document sort: {sort}")
+
+        where = " WHERE status = ?" if status else ""
+        count_params: tuple[str, ...] = (status,) if status else ()
+        list_params: tuple[object, ...] = (*count_params, limit, offset)
+
         with self._lock:
-            total = int(self._conn.execute("SELECT COUNT(*) AS c FROM documents").fetchone()["c"])
+            total = int(
+                self._conn.execute(
+                    f"SELECT COUNT(*) AS c FROM documents{where}", count_params
+                ).fetchone()["c"]
+            )
             rows = self._conn.execute(
-                "SELECT * FROM documents ORDER BY COALESCE(processed_at, '') DESC, id DESC "
-                "LIMIT ? OFFSET ?",
-                (limit, offset),
+                f"SELECT * FROM documents{where} ORDER BY {order_by} LIMIT ? OFFSET ?",
+                list_params,
             ).fetchall()
         return [_row_to_document(r) for r in rows], total
 

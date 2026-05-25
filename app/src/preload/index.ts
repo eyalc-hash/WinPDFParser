@@ -13,8 +13,10 @@ import type {
   OllamaStatus,
   ProcessAccepted,
   ProcessRequest,
+  RetryAccepted,
   SearchResponse,
   SettingsModel,
+  DocumentListOptions,
 } from "@shared/types";
 
 async function callSidecar<T>(req: SidecarRequest): Promise<T> {
@@ -34,6 +36,10 @@ const api: ElectronApi = {
   openPath: (path) => ipcRenderer.invoke(IPC.OpenPath, path),
   revealInFolder: (path) => ipcRenderer.invoke(IPC.RevealInFolder, path),
   openAppDataFolder: () => ipcRenderer.invoke(IPC.OpenAppData),
+  viewer: {
+    loadPdf: (path) => ipcRenderer.invoke(IPC.ViewerLoadPdf, path),
+    clear: () => ipcRenderer.invoke(IPC.ViewerClear),
+  },
   sidecar: {
     health: () => callSidecar<HealthResponse>({ method: "GET", path: "/health" }),
     process: (body: ProcessRequest) =>
@@ -42,12 +48,20 @@ const api: ElectronApi = {
     getJob: (id) => callSidecar<JobProgress>({ method: "GET", path: `/jobs/${id}` }),
     cancelJob: (id) =>
       callSidecar<{ cancelled: boolean }>({ method: "POST", path: `/jobs/${id}/cancel` }),
-    listDocuments: (limit = 200, offset = 0) =>
+    listDocuments: ({ limit = 200, offset = 0, status, sort }: DocumentListOptions = {}) =>
       callSidecar<DocumentList>({
         method: "GET",
         path: "/documents",
-        query: { limit, offset },
+        query: { limit, offset, status, sort },
       }),
+    listFailedDocuments: (limit = 20) =>
+      callSidecar<DocumentList>({
+        method: "GET",
+        path: "/documents",
+        query: { limit, status: "failed", sort: "processed_desc" },
+      }),
+    retryDocument: (id) =>
+      callSidecar<RetryAccepted>({ method: "POST", path: `/documents/${id}/retry` }),
     deleteDocument: (id) =>
       callSidecar<{ deleted: boolean }>({ method: "DELETE", path: `/documents/${id}` }),
     search: (q, limit = 50, offset = 0) =>
