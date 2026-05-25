@@ -208,18 +208,21 @@ class Database:
                 "LIMIT ? OFFSET ?",
                 (query, limit, offset),
             ).fetchall()
-        return ([
-            SearchHit(
-                document_id=r["document_id"],
-                original_name=r["original_name"],
-                ai_name=r["ai_name"],
-                output_path=r["output_path"],
-                snippet=r["snippet"],
-                # bm25 returns a lower-is-better score; invert for UX
-                score=-float(r["score"]),
-            )
-            for r in rows
-        ], total)
+        return (
+            [
+                SearchHit(
+                    document_id=r["document_id"],
+                    original_name=r["original_name"],
+                    ai_name=r["ai_name"],
+                    output_path=r["output_path"],
+                    snippet=r["snippet"],
+                    # bm25 returns a lower-is-better score; invert for UX
+                    score=-float(r["score"]),
+                )
+                for r in rows
+            ],
+            total,
+        )
 
     # -- settings -----------------------------------------------------------
 

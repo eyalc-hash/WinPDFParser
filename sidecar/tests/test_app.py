@@ -40,9 +40,7 @@ def test_search_requires_query(client: TestClient) -> None:
 
 def test_search_returns_total_and_offset(client: TestClient, tmp_path: Path) -> None:
     for idx in range(3):
-        doc_id = client.app.state.db.upsert_pending(
-            f"hash-{idx}", f"C:/in/{idx}.pdf", f"{idx}.pdf"
-        )
+        doc_id = client.app.state.db.upsert_pending(f"hash-{idx}", f"C:/in/{idx}.pdf", f"{idx}.pdf")
         client.app.state.db.mark_done(
             doc_id,
             output_path=f"C:/out/{idx}.pdf",
