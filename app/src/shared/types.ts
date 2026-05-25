@@ -54,6 +54,9 @@ export interface SearchHit {
 
 export interface SearchResponse {
   query: string;
+  total: number;
+  limit: number;
+  offset: number;
   hits: SearchHit[];
 }
 
@@ -101,7 +104,7 @@ export interface ElectronApi {
     cancelJob: (id: string) => Promise<{ cancelled: boolean }>;
     listDocuments: (limit?: number, offset?: number) => Promise<DocumentList>;
     deleteDocument: (id: number) => Promise<{ deleted: boolean }>;
-    search: (q: string, limit?: number) => Promise<SearchResponse>;
+    search: (q: string, limit?: number, offset?: number) => Promise<SearchResponse>;
     getSettings: () => Promise<SettingsModel>;
     putSettings: (s: SettingsModel) => Promise<SettingsModel>;
     ollamaStatus: () => Promise<OllamaStatus>;

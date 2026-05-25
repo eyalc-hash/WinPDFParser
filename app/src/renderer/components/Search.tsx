@@ -1,29 +1,43 @@
 import { useState } from "react";
-import type { SearchHit } from "@shared/types";
+import type { SearchHit, SearchResponse } from "@shared/types";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
 
+const PAGE_SIZE = 25;
+
 export function Search(): JSX.Element {
   const [q, setQ] = useState("");
-  const [hits, setHits] = useState<SearchHit[] | null>(null);
+  const [activeQuery, setActiveQuery] = useState("");
+  const [result, setResult] = useState<SearchResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const onSubmit = async (e: React.FormEvent): Promise<void> => {
-    e.preventDefault();
-    if (!q.trim()) return;
+  const executeSearch = async (query: string, offset = 0): Promise<void> => {
     setLoading(true);
     setError(null);
     try {
-      const res = await window.api.sidecar.search(q.trim(), 50);
-      setHits(res.hits);
+      const trimmed = query.trim();
+      const res = await window.api.sidecar.search(trimmed, PAGE_SIZE, offset);
+      setActiveQuery(trimmed);
+      setResult(res);
     } catch (err) {
       setError((err as Error).message);
-      setHits([]);
+      setResult(null);
     } finally {
       setLoading(false);
     }
   };
+
+  const onSubmit = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault();
+    if (!q.trim()) return;
+    await executeSearch(q, 0);
+  };
+
+  const showingFrom = result && result.total > 0 ? result.offset + 1 : 0;
+  const showingTo = result ? Math.min(result.offset + result.hits.length, result.total) : 0;
+  const canGoBack = Boolean(result && result.offset > 0 && !loading);
+  const canGoForward = Boolean(result && result.offset + result.hits.length < result.total && !loading);
 
   return (
     <div className="flex h-full flex-col">
@@ -40,11 +54,36 @@ export function Search(): JSX.Element {
       </form>
 
       <div className="flex-1 overflow-auto px-4 py-3">
+        {result ? (
+          <div className="mb-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+            <span>
+              {result.total === 0
+                ? `No matches for “${result.query}”.`
+                : `Showing ${showingFrom}–${showingTo} of ${result.total} matches for “${result.query}”.`}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="ghost"
+                disabled={!canGoBack}
+                onClick={() => void executeSearch(activeQuery, Math.max(result.offset - PAGE_SIZE, 0))}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={!canGoForward}
+                onClick={() => void executeSearch(activeQuery, result.offset + PAGE_SIZE)}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        ) : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
-        {hits && hits.length === 0 ? (
+        {result && result.total === 0 ? (
           <p className="text-sm text-muted-foreground">No matches.</p>
         ) : null}
-        {hits?.map((h) => <Hit key={h.document_id} hit={h} />)}
+        {result?.hits.map((h) => <Hit key={h.document_id} hit={h} />)}
       </div>
     </div>
   );

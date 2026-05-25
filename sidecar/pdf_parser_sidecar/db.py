@@ -187,10 +187,16 @@ class Database:
 
     # -- search -------------------------------------------------------------
 
-    def search(self, query: str, limit: int = 50) -> list[SearchHit]:
+    def search(self, query: str, limit: int = 50, offset: int = 0) -> tuple[list[SearchHit], int]:
         if not query.strip():
-            return []
+            return [], 0
         with self._lock:
+            total = int(
+                self._conn.execute(
+                    "SELECT COUNT(*) AS c FROM documents_fts WHERE documents_fts MATCH ?",
+                    (query,),
+                ).fetchone()["c"]
+            )
             rows = self._conn.execute(
                 "SELECT d.id AS document_id, d.original_name, d.ai_name, d.output_path, "
                 "snippet(documents_fts, 0, '[[', ']]', '…', 12) AS snippet, "
@@ -198,11 +204,11 @@ class Database:
                 "FROM documents_fts "
                 "JOIN documents d ON d.id = documents_fts.rowid "
                 "WHERE documents_fts MATCH ? "
-                "ORDER BY score "
-                "LIMIT ?",
-                (query, limit),
+                "ORDER BY score, d.id DESC "
+                "LIMIT ? OFFSET ?",
+                (query, limit, offset),
             ).fetchall()
-        return [
+        return ([
             SearchHit(
                 document_id=r["document_id"],
                 original_name=r["original_name"],
@@ -213,7 +219,7 @@ class Database:
                 score=-float(r["score"]),
             )
             for r in rows
-        ]
+        ], total)
 
     # -- settings -----------------------------------------------------------
 

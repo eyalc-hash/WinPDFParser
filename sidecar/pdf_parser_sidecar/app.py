@@ -58,6 +58,9 @@ def create_app(config: Config) -> FastAPI:
             db.close()
 
     app = FastAPI(title="PDF-Parser sidecar", version=__version__, lifespan=lifespan)
+    app.state.config = config
+    app.state.db = db
+    app.state.jobs = jobs
 
     # ---- health -----------------------------------------------------------
 
@@ -117,14 +120,16 @@ def create_app(config: Config) -> FastAPI:
 
     @app.get("/search", response_model=SearchResponse)
     async def search(
-        q: str = Query(..., min_length=1), limit: int = Query(50, ge=1, le=200)
+        q: str = Query(..., min_length=1),
+        limit: int = Query(50, ge=1, le=200),
+        offset: int = Query(0, ge=0),
     ) -> SearchResponse:
         try:
-            hits = db.search(q, limit=limit)
+            hits, total = db.search(q, limit=limit, offset=offset)
         except Exception as exc:  # noqa: BLE001
             # Bad FTS5 syntax shouldn't 500 the UI.
             raise HTTPException(status_code=400, detail=f"bad query: {exc}") from exc
-        return SearchResponse(query=q, hits=hits)
+        return SearchResponse(query=q, total=total, limit=limit, offset=offset, hits=hits)
 
     # ---- settings ---------------------------------------------------------
 

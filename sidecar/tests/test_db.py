@@ -48,7 +48,8 @@ def test_mark_done_and_search(db: Database) -> None:
         text="This is a software license agreement effective 2024.",
     )
 
-    hits = db.search("license")
+    hits, total = db.search("license")
+    assert total == 1
     assert len(hits) == 1
     assert hits[0].document_id == doc_id
     assert "[[license]]" in hits[0].snippet
@@ -59,8 +60,32 @@ def test_mark_done_and_search(db: Database) -> None:
 
 
 def test_search_empty_query_returns_nothing(db: Database) -> None:
-    assert db.search("") == []
-    assert db.search("   ") == []
+    assert db.search("") == ([], 0)
+    assert db.search("   ") == ([], 0)
+
+
+def test_search_supports_offset_and_total(db: Database) -> None:
+    for idx in range(3):
+        h = hashlib.sha256(f"doc-{idx}".encode()).hexdigest()
+        doc_id = db.upsert_pending(h, f"C:/in/{idx}.pdf", f"{idx}.pdf")
+        db.mark_done(
+            doc_id,
+            output_path=f"C:/out/{idx}.pdf",
+            ai_name=f"doc-{idx}",
+            page_count=1,
+            text="invoice number 42",
+        )
+
+    first_page, total = db.search("invoice", limit=2, offset=0)
+    second_page, second_total = db.search("invoice", limit=2, offset=2)
+
+    assert total == 3
+    assert second_total == 3
+    assert len(first_page) == 2
+    assert len(second_page) == 1
+    assert {hit.document_id for hit in first_page}.isdisjoint(
+        {hit.document_id for hit in second_page}
+    )
 
 
 def test_reconcile_interrupted(db: Database) -> None:

@@ -38,6 +38,29 @@ def test_search_requires_query(client: TestClient) -> None:
     assert r.status_code == 422  # min_length=1
 
 
+def test_search_returns_total_and_offset(client: TestClient, tmp_path: Path) -> None:
+    for idx in range(3):
+        doc_id = client.app.state.db.upsert_pending(
+            f"hash-{idx}", f"C:/in/{idx}.pdf", f"{idx}.pdf"
+        )
+        client.app.state.db.mark_done(
+            doc_id,
+            output_path=f"C:/out/{idx}.pdf",
+            ai_name=f"doc-{idx}",
+            page_count=1,
+            text="invoice number 42",
+        )
+
+    r = client.get("/search", params={"q": "invoice", "limit": 2, "offset": 1})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["query"] == "invoice"
+    assert body["total"] == 3
+    assert body["limit"] == 2
+    assert body["offset"] == 1
+    assert len(body["hits"]) == 2
+
+
 def test_settings_roundtrip(client: TestClient) -> None:
     r = client.get("/settings")
     assert r.status_code == 200
