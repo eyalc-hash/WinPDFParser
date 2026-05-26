@@ -92,6 +92,8 @@ export function registerIpcHandlers(sidecar: SidecarManager): void {
   ipcMain.handle(IPC.Sidecar, async (_e, req: SidecarRequest): Promise<SidecarResponse> => {
     return proxyToSidecar(sidecar, req);
   });
+
+  ipcMain.handle(IPC.SidecarDiagnostics, () => sidecar.getDiagnostics());
 }
 
 async function exportDiagnostics(sidecar: SidecarManager): Promise<string> {

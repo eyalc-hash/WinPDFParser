@@ -6,6 +6,7 @@ export const IPC = {
   OpenAppData: "shell:open-app-data",
   ExportDiagnostics: "app:export-diagnostics",
   Sidecar: "sidecar:request",
+  SidecarDiagnostics: "sidecar:diagnostics",
   ViewerLoadPdf: "viewer:load-pdf",
   ViewerClear: "viewer:clear",
 } as const;

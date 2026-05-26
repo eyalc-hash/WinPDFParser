@@ -155,6 +155,15 @@ export interface HealthDetails {
   ocr: OcrToolsStatus;
 }
 
+export interface SidecarDiagnostics {
+  running: boolean;
+  command: string | null;
+  startError: string | null;
+  lastExit: { code: number | null; signal: string | null } | null;
+  stderrTail: string[];
+  logFile: string | null;
+}
+
 /** Surface exposed by `preload` on `window.api`. */
 export interface ElectronApi {
   pickFolder: (kind: "input" | "output") => Promise<string | null>;
@@ -162,6 +171,7 @@ export interface ElectronApi {
   revealInFolder: (path: string) => Promise<void>;
   openAppDataFolder: () => Promise<void>;
   exportDiagnostics: () => Promise<string>;
+  getSidecarDiagnostics: () => Promise<SidecarDiagnostics>;
   viewer: {
     loadPdf: (path: string) => Promise<string | null>;
     clear: () => Promise<void>;

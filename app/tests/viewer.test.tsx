@@ -33,6 +33,7 @@ beforeEach(() => {
     revealInFolder: vi.fn(),
     openAppDataFolder: vi.fn(),
     exportDiagnostics: vi.fn(),
+    getSidecarDiagnostics: vi.fn(),
     viewer: viewerApi,
     sidecar: {
       health: vi.fn(),

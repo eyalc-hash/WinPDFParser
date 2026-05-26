@@ -35,6 +35,14 @@ beforeEach(() => {
     revealInFolder: vi.fn(),
     openAppDataFolder: vi.fn(),
     exportDiagnostics: vi.fn().mockResolvedValue("C:/diag.json"),
+    getSidecarDiagnostics: vi.fn().mockResolvedValue({
+      running: false,
+      command: null,
+      startError: null,
+      lastExit: null,
+      stderrTail: [],
+      logFile: null,
+    }),
     viewer: {
       loadPdf: vi.fn(),
       clear: vi.fn(),

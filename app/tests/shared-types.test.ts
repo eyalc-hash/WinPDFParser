@@ -12,6 +12,7 @@ import type {
   ProcessRequest,
   SearchHit,
   SettingsModel,
+  SidecarDiagnostics,
 } from "../src/shared/types";
 
 describe("shared types contract", () => {
@@ -188,5 +189,18 @@ describe("shared types contract", () => {
       }),
     };
     expect(sidecar.retryFailedBatch).toBeTypeOf("function");
+  });
+
+  it("SidecarDiagnostics carries the fields the renderer surfaces on failure", () => {
+    const diag: SidecarDiagnostics = {
+      running: false,
+      command: "python -m pdf_parser_sidecar",
+      startError: "Timed out waiting for sidecar port handshake",
+      lastExit: { code: 1, signal: null },
+      stderrTail: ["[sidecar] ModuleNotFoundError: No module named 'pdf_parser_sidecar'"],
+      logFile: "C:/Users/x/AppData/Roaming/pdf-parser/logs/sidecar.log",
+    };
+    expect(diag.stderrTail.length).toBeGreaterThan(0);
+    expect(diag.lastExit?.code).toBe(1);
   });
 });
