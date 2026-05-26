@@ -164,6 +164,22 @@ export interface SidecarDiagnostics {
   logFile: string | null;
 }
 
+export interface FeedbackRequest {
+  /** Short summary / title shown as the issue title. */
+  title: string;
+  /** Full description, suggestion, or feature request body. */
+  body: string;
+  /** Optional username or email so we can follow up. */
+  contact?: string;
+}
+
+export interface FeedbackResult {
+  success: boolean;
+  /** URL of the created GitHub issue, if successful. */
+  issueUrl?: string;
+  error?: string;
+}
+
 /**
  * Auto-update lifecycle, broadcast from the Electron main process to the
  * renderer. The renderer never talks to `electron-updater` directly.
@@ -207,6 +223,7 @@ export interface ElectronApi {
   openAppDataFolder: () => Promise<void>;
   exportDiagnostics: () => Promise<string>;
   getSidecarDiagnostics: () => Promise<SidecarDiagnostics>;
+  submitFeedback: (req: FeedbackRequest) => Promise<FeedbackResult>;
   viewer: {
     loadPdf: (path: string) => Promise<string | null>;
     clear: () => Promise<void>;

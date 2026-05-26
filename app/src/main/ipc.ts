@@ -11,6 +11,7 @@ import { pathToFileURL } from "node:url";
 import { BrowserWindow, dialog, ipcMain, shell, app, protocol, net } from "electron";
 import { IPC, type SidecarRequest, type SidecarResponse } from "@shared/ipc";
 import type { SidecarManager } from "./sidecar";
+import type { FeedbackRequest, FeedbackResult } from "@shared/types";
 import {
   checkForUpdatesNow,
   getLastUpdateStatus,
@@ -117,6 +118,10 @@ export function registerIpcHandlers(sidecar: SidecarManager): void {
   // the banner without waiting for the next state change.
   ipcMain.on(IPC.UpdaterStatus, (event) => {
     event.sender.send(IPC.UpdaterStatus, getLastUpdateStatus());
+  });
+
+  ipcMain.handle(IPC.SubmitFeedback, async (_e, req: FeedbackRequest): Promise<FeedbackResult> => {
+    return submitFeedbackToGitHub(req);
   });
 }
 
@@ -281,5 +286,57 @@ async function proxyToSidecar(
     return { ok: r.ok, status: r.status, data, error: r.ok ? undefined : `HTTP ${r.status}` };
   } catch (err) {
     return { ok: false, status: 0, data: null, error: (err as Error).message };
+  }
+}
+
+const FEEDBACK_REPO = "eyalc-hash/WinPDFParser";
+
+async function submitFeedbackToGitHub(req: FeedbackRequest): Promise<FeedbackResult> {
+  const token = process.env.GITHUB_FEEDBACK_TOKEN ?? "";
+
+  let body = req.body.trim();
+  if (req.contact?.trim()) {
+    body += `\n\n---\n**Contact:** ${req.contact.trim()}`;
+  }
+
+  if (!token) {
+    // No token configured — open the pre-filled GitHub new-issue page instead.
+    const params = new URLSearchParams({
+      title: req.title.trim(),
+      body,
+    });
+    const url = `https://github.com/${FEEDBACK_REPO}/issues/new?${params.toString()}`;
+    await shell.openExternal(url);
+    return { success: true, issueUrl: url };
+  }
+
+  try {
+    const response = await fetch(`https://api.github.com/repos/${FEEDBACK_REPO}/issues`, {
+      method: "POST",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      body: JSON.stringify({
+        title: req.title.trim(),
+        body,
+        labels: ["feedback"],
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      return {
+        success: false,
+        error: `GitHub API error ${response.status}: ${text.slice(0, 200)}`,
+      };
+    }
+
+    const data = (await response.json()) as { html_url?: string };
+    return { success: true, issueUrl: data.html_url };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
   }
 }

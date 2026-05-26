@@ -4,6 +4,7 @@ import { Search } from "./components/Search";
 import { SettingsDrawer } from "./components/Settings";
 import { Processor } from "./components/Processor";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { FeedbackDialog } from "./components/FeedbackDialog";
 import { Button } from "./components/ui/Button";
 import type { SidecarDiagnostics } from "../shared/types";
 
@@ -12,6 +13,7 @@ type Tab = "library" | "search";
 export function App(): JSX.Element {
   const [tab, setTab] = useState<Tab>("library");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [version, setVersion] = useState<string | null>(null);
   const [sidecarOnline, setSidecarOnline] = useState<boolean | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -71,6 +73,9 @@ export function App(): JSX.Element {
           {sidecarOnline === false ? (
             <span className="text-destructive">sidecar offline — processing/search unavailable</span>
           ) : null}
+          <Button variant="ghost" onClick={() => setFeedbackOpen(true)}>
+            Send feedback
+          </Button>
           <Button variant="ghost" onClick={() => setSettingsOpen(true)}>
             Settings
           </Button>
@@ -98,6 +103,7 @@ export function App(): JSX.Element {
       </main>
 
       {settingsOpen ? <SettingsDrawer onClose={() => setSettingsOpen(false)} /> : null}
+      {feedbackOpen ? <FeedbackDialog onClose={() => setFeedbackOpen(false)} /> : null}
     </div>
   );
 }

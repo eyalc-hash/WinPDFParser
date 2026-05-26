@@ -7,6 +7,8 @@ import { IPC, type SidecarRequest, type SidecarResponse } from "@shared/ipc";
 import type {
   DocumentList,
   ElectronApi,
+  FeedbackRequest,
+  FeedbackResult,
   HealthResponse,
   HealthDetails,
   JobList,
@@ -44,6 +46,8 @@ const api: ElectronApi = {
   exportDiagnostics: () => ipcRenderer.invoke(IPC.ExportDiagnostics),
   getSidecarDiagnostics: () =>
     ipcRenderer.invoke(IPC.SidecarDiagnostics) as Promise<SidecarDiagnostics>,
+  submitFeedback: (req: FeedbackRequest) =>
+    ipcRenderer.invoke(IPC.SubmitFeedback, req) as Promise<FeedbackResult>,
   viewer: {
     loadPdf: (path) => ipcRenderer.invoke(IPC.ViewerLoadPdf, path),
     clear: () => ipcRenderer.invoke(IPC.ViewerClear),

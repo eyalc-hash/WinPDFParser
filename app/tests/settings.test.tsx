@@ -43,6 +43,7 @@ beforeEach(() => {
       stderrTail: [],
       logFile: null,
     }),
+    submitFeedback: vi.fn().mockResolvedValue({ success: true }),
     viewer: {
       loadPdf: vi.fn(),
       clear: vi.fn(),

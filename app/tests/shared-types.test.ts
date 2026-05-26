@@ -7,6 +7,8 @@ import { describe, it, expect } from "vitest";
 import type {
   DocumentRow,
   ElectronApi,
+  FeedbackRequest,
+  FeedbackResult,
   HealthDetails,
   JobProgress,
   ProcessRequest,
@@ -116,6 +118,28 @@ describe("shared types contract", () => {
       },
     };
     expect(details.ocr.real_ocr_ready).toBe(true);
+  });
+
+  it("FeedbackRequest and FeedbackResult have the expected shapes", () => {
+    const req: FeedbackRequest = {
+      title: "Add dark mode",
+      body: "It would be great to have a dark mode option.",
+      contact: "user@example.com",
+    };
+    expect(req.title).toBe("Add dark mode");
+
+    const resultOk: FeedbackResult = { success: true, issueUrl: "https://github.com/x/y/issues/1" };
+    expect(resultOk.success).toBe(true);
+
+    const resultErr: FeedbackResult = { success: false, error: "API error" };
+    expect(resultErr.error).toBe("API error");
+  });
+
+  it("ElectronApi exposes submitFeedback", () => {
+    const api: Pick<ElectronApi, "submitFeedback"> = {
+      submitFeedback: async () => ({ success: true }),
+    };
+    expect(api.submitFeedback).toBeTypeOf("function");
   });
 
   it("ElectronApi sidecar exposes recovery and health-detail methods", () => {
