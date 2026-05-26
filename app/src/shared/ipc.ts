@@ -8,6 +8,11 @@ export const IPC = {
   Sidecar: "sidecar:request",
   ViewerLoadPdf: "viewer:load-pdf",
   ViewerClear: "viewer:clear",
+  UpdaterSetEnabled: "updater:set-enabled",
+  UpdaterCheckNow: "updater:check-now",
+  UpdaterQuitAndInstall: "updater:quit-and-install",
+  /** Channel used by main → renderer to push UpdateStatus events. */
+  UpdaterStatus: "updater:status",
 } as const;
 
 export type SidecarMethod = "GET" | "POST" | "PUT" | "DELETE";

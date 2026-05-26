@@ -20,6 +20,7 @@ import type {
   DocumentListOptions,
   SearchOptions,
   IndexHealth,
+  UpdateStatus,
 } from "@shared/types";
 
 async function callSidecar<T>(req: SidecarRequest): Promise<T> {
@@ -43,6 +44,20 @@ const api: ElectronApi = {
   viewer: {
     loadPdf: (path) => ipcRenderer.invoke(IPC.ViewerLoadPdf, path),
     clear: () => ipcRenderer.invoke(IPC.ViewerClear),
+  },
+  updater: {
+    setEnabled: (enabled) => ipcRenderer.invoke(IPC.UpdaterSetEnabled, enabled),
+    checkNow: () => ipcRenderer.invoke(IPC.UpdaterCheckNow),
+    quitAndInstall: () => ipcRenderer.invoke(IPC.UpdaterQuitAndInstall),
+    onStatus: (cb) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: UpdateStatus): void =>
+        cb(status);
+      ipcRenderer.on(IPC.UpdaterStatus, listener);
+      // Ask main for the current snapshot so the UI doesn't have to wait for
+      // the next state change.
+      ipcRenderer.send(IPC.UpdaterStatus);
+      return () => ipcRenderer.removeListener(IPC.UpdaterStatus, listener);
+    },
   },
   sidecar: {
     health: () => callSidecar<HealthResponse>({ method: "GET", path: "/health" }),

@@ -3,6 +3,7 @@ import { Library } from "./components/Library";
 import { Search } from "./components/Search";
 import { SettingsDrawer } from "./components/Settings";
 import { Processor } from "./components/Processor";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { Button } from "./components/ui/Button";
 
 type Tab = "library" | "search";
@@ -65,6 +66,8 @@ export function App(): JSX.Element {
           </Button>
         </div>
       </header>
+
+      <UpdateBanner />
 
       <Processor onFinished={onJobFinished} />
 
