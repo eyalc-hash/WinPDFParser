@@ -25,6 +25,17 @@ their contents, and any metadata derived from them **never leave your machine**.
 The app ships with `electron-updater` wired up but **disabled by default**. No
 update checks are performed unless you explicitly opt in via the Settings panel.
 
+When you opt in, the app will:
+
+- Check for a new version on startup and once an hour while it is running.
+- If a newer version is found, download it in the background.
+- Show a banner with a **Restart to install** button so you choose when the
+  upgrade happens. The app is never restarted without your click.
+
+Update checks contact only the configured update feed and transmit no document
+contents, derived metadata, or telemetry. Disabling the setting stops all
+update-related network activity.
+
 ## Logs
 
 The sidecar writes structured logs to `%APPDATA%/PDF-Parser/logs/sidecar.log`

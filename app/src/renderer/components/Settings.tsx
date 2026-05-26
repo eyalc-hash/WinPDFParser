@@ -68,6 +68,14 @@ export function SettingsDrawer({ onClose }: Props): JSX.Element {
     try {
       const s = await window.api.sidecar.putSettings(settings);
       setSettings(s);
+      // Push the new opt-in state to the main process so auto-update checks
+      // start/stop without requiring an app restart.
+      try {
+        await window.api.updater.setEnabled(s.auto_update);
+      } catch {
+        // Non-fatal: settings were saved successfully; the updater toggle
+        // will be reapplied on next launch.
+      }
       setSaved(true);
       setTimeout(() => setSaved(false), 1500);
     } catch (err) {
@@ -164,6 +172,10 @@ export function SettingsDrawer({ onClose }: Props): JSX.Element {
               />
               Enable auto-update checks (off by default — no telemetry, no network calls)
             </label>
+            <p className="-mt-3 ml-6 text-xs text-muted-foreground">
+              When enabled, the app checks for a new version on startup and every hour,
+              downloads it in the background, and shows a “Restart to install” button.
+            </p>
 
             <RecentFailures
               failures={failures}
