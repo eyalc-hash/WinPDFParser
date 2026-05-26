@@ -17,6 +17,7 @@ import type {
   RetryAccepted,
   SearchResponse,
   SettingsModel,
+  SidecarDiagnostics,
   DocumentListOptions,
   SearchOptions,
   IndexHealth,
@@ -41,6 +42,8 @@ const api: ElectronApi = {
   revealInFolder: (path) => ipcRenderer.invoke(IPC.RevealInFolder, path),
   openAppDataFolder: () => ipcRenderer.invoke(IPC.OpenAppData),
   exportDiagnostics: () => ipcRenderer.invoke(IPC.ExportDiagnostics),
+  getSidecarDiagnostics: () =>
+    ipcRenderer.invoke(IPC.SidecarDiagnostics) as Promise<SidecarDiagnostics>,
   viewer: {
     loadPdf: (path) => ipcRenderer.invoke(IPC.ViewerLoadPdf, path),
     clear: () => ipcRenderer.invoke(IPC.ViewerClear),

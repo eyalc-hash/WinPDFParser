@@ -99,6 +99,8 @@ export function registerIpcHandlers(sidecar: SidecarManager): void {
     return proxyToSidecar(sidecar, req);
   });
 
+  ipcMain.handle(IPC.SidecarDiagnostics, () => sidecar.getDiagnostics());
+
   ipcMain.handle(IPC.UpdaterSetEnabled, async (_e, enabled: boolean) => {
     await setAutoUpdateEnabled(Boolean(enabled));
   });

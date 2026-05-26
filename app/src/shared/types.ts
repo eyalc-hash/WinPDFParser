@@ -155,6 +155,15 @@ export interface HealthDetails {
   ocr: OcrToolsStatus;
 }
 
+export interface SidecarDiagnostics {
+  running: boolean;
+  command: string | null;
+  startError: string | null;
+  lastExit: { code: number | null; signal: string | null } | null;
+  stderrTail: string[];
+  logFile: string | null;
+}
+
 /**
  * Auto-update lifecycle, broadcast from the Electron main process to the
  * renderer. The renderer never talks to `electron-updater` directly.
@@ -197,6 +206,7 @@ export interface ElectronApi {
   revealInFolder: (path: string) => Promise<void>;
   openAppDataFolder: () => Promise<void>;
   exportDiagnostics: () => Promise<string>;
+  getSidecarDiagnostics: () => Promise<SidecarDiagnostics>;
   viewer: {
     loadPdf: (path: string) => Promise<string | null>;
     clear: () => Promise<void>;

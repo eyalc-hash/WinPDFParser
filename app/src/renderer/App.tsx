@@ -5,6 +5,7 @@ import { SettingsDrawer } from "./components/Settings";
 import { Processor } from "./components/Processor";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { Button } from "./components/ui/Button";
+import type { SidecarDiagnostics } from "../shared/types";
 
 type Tab = "library" | "search";
 
@@ -14,6 +15,8 @@ export function App(): JSX.Element {
   const [version, setVersion] = useState<string | null>(null);
   const [sidecarOnline, setSidecarOnline] = useState<boolean | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [diagnostics, setDiagnostics] = useState<SidecarDiagnostics | null>(null);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -23,10 +26,17 @@ export function App(): JSX.Element {
         if (cancelled) return;
         setVersion(h.version);
         setSidecarOnline(true);
+        setDiagnostics(null);
       } catch {
         if (cancelled) return;
         setVersion(null);
         setSidecarOnline(false);
+        try {
+          const diag = await window.api.getSidecarDiagnostics();
+          if (!cancelled) setDiagnostics(diag);
+        } catch {
+          // Ignore — diagnostics are best-effort.
+        }
       }
     };
     void check();
@@ -69,6 +79,14 @@ export function App(): JSX.Element {
 
       <UpdateBanner />
 
+      {sidecarOnline === false ? (
+        <SidecarErrorBanner
+          diagnostics={diagnostics}
+          open={diagnosticsOpen}
+          onToggle={() => setDiagnosticsOpen((v) => !v)}
+        />
+      ) : null}
+
       <Processor onFinished={onJobFinished} />
 
       <main className="flex-1 overflow-hidden">
@@ -81,6 +99,74 @@ export function App(): JSX.Element {
 
       {settingsOpen ? <SettingsDrawer onClose={() => setSettingsOpen(false)} /> : null}
     </div>
+  );
+}
+
+function SidecarErrorBanner({
+  diagnostics,
+  open,
+  onToggle,
+}: {
+  diagnostics: SidecarDiagnostics | null;
+  open: boolean;
+  onToggle: () => void;
+}): JSX.Element {
+  const startError = diagnostics?.startError ?? null;
+  const tail = diagnostics?.stderrTail ?? [];
+  const lastExit = diagnostics?.lastExit ?? null;
+  const hasDetails = Boolean(startError) || tail.length > 0 || lastExit !== null;
+
+  return (
+    <section
+      role="alert"
+      aria-label="Sidecar error"
+      className="border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-xs text-destructive"
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col">
+          <span className="font-semibold">
+            The Python sidecar is not responding.
+          </span>
+          <span className="text-destructive/80">
+            {startError ?? "No connection to the local backend — see details for the recent log."}
+          </span>
+        </div>
+        {hasDetails ? (
+          <Button variant="ghost" onClick={onToggle}>
+            {open ? "Hide details" : "Show details"}
+          </Button>
+        ) : null}
+      </div>
+      {open && hasDetails ? (
+        <div className="mt-2 space-y-2">
+          {diagnostics?.command ? (
+            <div>
+              <span className="font-semibold">Command:</span>{" "}
+              <code className="break-all">{diagnostics.command}</code>
+            </div>
+          ) : null}
+          {lastExit ? (
+            <div>
+              <span className="font-semibold">Last exit:</span> code={String(lastExit.code)}{" "}
+              signal={lastExit.signal ?? "null"}
+            </div>
+          ) : null}
+          {diagnostics?.logFile ? (
+            <div>
+              <span className="font-semibold">Log file:</span>{" "}
+              <code className="break-all">{diagnostics.logFile}</code>
+            </div>
+          ) : null}
+          {tail.length > 0 ? (
+            <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-background/60 p-2 font-mono text-[11px] text-foreground">
+              {tail.join("\n")}
+            </pre>
+          ) : (
+            <div className="text-destructive/80">No stderr captured yet.</div>
+          )}
+        </div>
+      ) : null}
+    </section>
   );
 }
 

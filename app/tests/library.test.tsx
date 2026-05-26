@@ -24,6 +24,7 @@ beforeEach(() => {
     revealInFolder: vi.fn(),
     openAppDataFolder: vi.fn(),
     exportDiagnostics: vi.fn(),
+    getSidecarDiagnostics: vi.fn(),
     viewer: {
       loadPdf: vi.fn(),
       clear: vi.fn(),
