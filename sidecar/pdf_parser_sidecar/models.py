@@ -68,10 +68,12 @@ class DocumentList(BaseModel):
 class SearchHit(BaseModel):
     document_id: int
     original_name: str
+    original_path: str
     ai_name: str | None
     output_path: str | None
     snippet: str
     score: float
+    page_number: int | None = None
     processed_at: datetime | None = None
     title: str | None = None
     author: str | None = None
@@ -201,3 +203,23 @@ class WatchScanResponse(BaseModel):
     job_ids: list[str]
     batch_id: str | None = None
     reason: str | None = None
+
+
+class AgentAskRequest(BaseModel):
+    question: str = Field(min_length=1)
+
+
+class AgentCitation(BaseModel):
+    document_id: int
+    original_name: str
+    ai_name: str | None = None
+    output_path: str | None = None
+    passage: str
+
+
+class AgentAnswer(BaseModel):
+    question: str
+    answer: str
+    queries: list[str]
+    citations: list[AgentCitation]
+    model_available: bool

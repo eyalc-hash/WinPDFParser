@@ -117,7 +117,7 @@ export function Library({ refreshKey }: Props): JSX.Element {
 
   return (
     <div className="h-full overflow-auto px-4 py-3">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             Status
@@ -191,6 +191,7 @@ export function Library({ refreshKey }: Props): JSX.Element {
       {showFilteredEmpty ? <FilteredEmptyState onClear={clearFilters} /> : null}
       {showLibraryEmpty ? <EmptyState /> : null}
       {docs.length > 0 ? (
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
         <table className="w-full table-fixed text-sm">
           <caption className="sr-only">Indexed documents table</caption>
           <thead className="text-xs uppercase text-muted-foreground">
@@ -233,6 +234,7 @@ export function Library({ refreshKey }: Props): JSX.Element {
             ))}
           </tbody>
         </table>
+        </div>
       ) : null}
     </div>
   );
@@ -251,7 +253,7 @@ function EmptyState(): JSX.Element {
   return (
     <div className="mt-16 flex flex-col items-center justify-center gap-2 text-center text-muted-foreground">
       <p className="text-lg">No documents yet.</p>
-      <p className="text-sm">Choose an input + output folder above and click <strong>Run OCR</strong>.</p>
+      <p className="text-sm">Choose an input folder above and click <strong>Run OCR</strong>.</p>
     </div>
   );
 }

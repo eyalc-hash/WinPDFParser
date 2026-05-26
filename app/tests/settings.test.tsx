@@ -34,6 +34,7 @@ beforeEach(() => {
   window.api = {
     pickFolder: vi.fn(),
     openPath: vi.fn(),
+    openPdfAtPage: vi.fn(),
     revealInFolder: vi.fn(),
     openAppDataFolder: vi.fn(),
     exportDiagnostics: vi.fn().mockResolvedValue("C:/diag.json"),
@@ -45,6 +46,7 @@ beforeEach(() => {
       stderrTail: [],
       logFile: null,
     }),
+    submitFeedback: vi.fn().mockResolvedValue({ success: true }),
     viewer: {
       loadPdf: vi.fn(),
       clear: vi.fn(),

@@ -2,6 +2,7 @@
 export const IPC = {
   PickFolder: "dialog:pick-folder",
   OpenPath: "shell:open-path",
+  OpenPdfAtPage: "shell:open-pdf-at-page",
   RevealInFolder: "shell:reveal",
   OpenAppData: "shell:open-app-data",
   ExportDiagnostics: "app:export-diagnostics",
@@ -14,6 +15,7 @@ export const IPC = {
   UpdaterQuitAndInstall: "updater:quit-and-install",
   /** Channel used by main → renderer to push UpdateStatus events. */
   UpdaterStatus: "updater:status",
+  SubmitFeedback: "app:submit-feedback",
 } as const;
 
 export type SidecarMethod = "GET" | "POST" | "PUT" | "DELETE";

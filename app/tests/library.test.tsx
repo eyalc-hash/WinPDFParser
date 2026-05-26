@@ -21,10 +21,12 @@ beforeEach(() => {
   window.api = {
     pickFolder: vi.fn(),
     openPath: vi.fn(),
+    openPdfAtPage: vi.fn(),
     revealInFolder: vi.fn(),
     openAppDataFolder: vi.fn(),
     exportDiagnostics: vi.fn(),
     getSidecarDiagnostics: vi.fn(),
+    submitFeedback: vi.fn().mockResolvedValue({ success: true }),
     viewer: {
       loadPdf: vi.fn(),
       clear: vi.fn(),

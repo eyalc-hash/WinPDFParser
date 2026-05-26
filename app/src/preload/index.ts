@@ -5,8 +5,11 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC, type SidecarRequest, type SidecarResponse } from "@shared/ipc";
 import type {
+  AgentAnswer,
   DocumentList,
   ElectronApi,
+  FeedbackRequest,
+  FeedbackResult,
   HealthResponse,
   HealthDetails,
   JobList,
@@ -42,11 +45,14 @@ async function callSidecar<T>(req: SidecarRequest): Promise<T> {
 const api: ElectronApi = {
   pickFolder: (kind) => ipcRenderer.invoke(IPC.PickFolder, kind),
   openPath: (path) => ipcRenderer.invoke(IPC.OpenPath, path),
+  openPdfAtPage: (path, page) => ipcRenderer.invoke(IPC.OpenPdfAtPage, path, page),
   revealInFolder: (path) => ipcRenderer.invoke(IPC.RevealInFolder, path),
   openAppDataFolder: () => ipcRenderer.invoke(IPC.OpenAppData),
   exportDiagnostics: () => ipcRenderer.invoke(IPC.ExportDiagnostics),
   getSidecarDiagnostics: () =>
     ipcRenderer.invoke(IPC.SidecarDiagnostics) as Promise<SidecarDiagnostics>,
+  submitFeedback: (req: FeedbackRequest) =>
+    ipcRenderer.invoke(IPC.SubmitFeedback, req) as Promise<FeedbackResult>,
   viewer: {
     loadPdf: (path) => ipcRenderer.invoke(IPC.ViewerLoadPdf, path),
     clear: () => ipcRenderer.invoke(IPC.ViewerClear),
@@ -134,6 +140,14 @@ const api: ElectronApi = {
       callSidecar<WatchStatusResponse>({ method: "GET", path: "/watch/status" }),
     watchScanNow: () =>
       callSidecar<WatchScanResponse>({ method: "POST", path: "/watch/scan-now" }),
+    agent: {
+      ask: (question: string) =>
+        callSidecar<AgentAnswer>({
+          method: "POST",
+          path: "/agent/ask",
+          body: { question },
+        }),
+    },
   },
 };
 

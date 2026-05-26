@@ -78,10 +78,12 @@ export interface GetJobOptions {
 export interface SearchHit {
   document_id: number;
   original_name: string;
+  original_path: string;
   ai_name: string | null;
   output_path: string | null;
   snippet: string;
   score: number;
+  page_number: number | null;
   processed_at: string | null;
   title: string | null;
   author: string | null;
@@ -183,6 +185,26 @@ export interface IndexHealth {
   orphaned_fts_rows: number;
 }
 
+export interface AgentAskRequest {
+  question: string;
+}
+
+export interface AgentCitation {
+  document_id: number;
+  original_name: string;
+  ai_name: string | null;
+  output_path: string | null;
+  passage: string;
+}
+
+export interface AgentAnswer {
+  question: string;
+  answer: string;
+  queries: string[];
+  citations: AgentCitation[];
+  model_available: boolean;
+}
+
 export interface OcrToolsStatus {
   has_ocrmypdf_package: boolean;
   tesseract_available: boolean;
@@ -206,6 +228,22 @@ export interface SidecarDiagnostics {
   lastExit: { code: number | null; signal: string | null } | null;
   stderrTail: string[];
   logFile: string | null;
+}
+
+export interface FeedbackRequest {
+  /** Short summary / title shown as the issue title. */
+  title: string;
+  /** Full description, suggestion, or feature request body. */
+  body: string;
+  /** Optional username or email so we can follow up. */
+  contact?: string;
+}
+
+export interface FeedbackResult {
+  success: boolean;
+  /** URL of the created GitHub issue, if successful. */
+  issueUrl?: string;
+  error?: string;
 }
 
 /**
@@ -247,10 +285,12 @@ export interface UpdateStatus {
 export interface ElectronApi {
   pickFolder: (kind: "input" | "output") => Promise<string | null>;
   openPath: (path: string) => Promise<void>;
+  openPdfAtPage: (path: string, page: number | null) => Promise<void>;
   revealInFolder: (path: string) => Promise<void>;
   openAppDataFolder: () => Promise<void>;
   exportDiagnostics: () => Promise<string>;
   getSidecarDiagnostics: () => Promise<SidecarDiagnostics>;
+  submitFeedback: (req: FeedbackRequest) => Promise<FeedbackResult>;
   viewer: {
     loadPdf: (path: string) => Promise<string | null>;
     clear: () => Promise<void>;
@@ -300,6 +340,9 @@ export interface ElectronApi {
     }>;
     watchStatus: () => Promise<WatchStatusResponse>;
     watchScanNow: () => Promise<WatchScanResponse>;
+    agent: {
+      ask: (question: string) => Promise<AgentAnswer>;
+    };
   };
 }
 

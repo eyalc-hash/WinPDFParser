@@ -8,10 +8,10 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variants: Record<Variant, string> = {
-  primary: "bg-primary text-primary-foreground hover:bg-primary/90",
+  primary: "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm",
   secondary: "bg-muted text-foreground hover:bg-muted/70",
   ghost: "bg-transparent text-foreground hover:bg-muted/50",
-  destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+  destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm",
 };
 
 export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
@@ -24,7 +24,7 @@ export const Button = forwardRef<HTMLButtonElement, Props>(function Button(
       {...rest}
       className={
         "inline-flex h-9 items-center justify-center rounded-md px-3 text-sm font-medium " +
-        "transition-colors disabled:cursor-not-allowed disabled:opacity-50 " +
+        "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50 " +
         variants[variant] +
         (className ? " " + className : "")
       }

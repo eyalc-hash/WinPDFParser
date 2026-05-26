@@ -8,6 +8,7 @@ each runs exactly once.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 import threading
 from collections.abc import Iterable, Iterator
@@ -17,7 +18,14 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from .models import DocumentRow, DocumentSort, DocumentStatus, JobProgress, SearchHit, SearchRank
+from .models import (
+    DocumentRow,
+    DocumentSort,
+    DocumentStatus,
+    JobProgress,
+    SearchHit,
+    SearchRank,
+)
 
 
 def _utcnow_iso() -> str:
@@ -290,9 +298,9 @@ class Database:
                 ).fetchone()["c"]
             )
             rows = self._conn.execute(
-                "SELECT d.id AS document_id, d.original_name, d.ai_name, d.output_path, "
+                "SELECT d.id AS document_id, d.original_name, d.original_path, d.ai_name, d.output_path, "
                 "snippet(documents_fts, 0, '[[', ']]', '…', 12) AS snippet, "
-                "bm25(documents_fts) AS score, d.processed_at, d.title, d.author, d.source_created_at "
+                "bm25(documents_fts) AS score, d.processed_at, d.title, d.author, d.source_created_at, documents_fts.body AS body "
                 "FROM documents_fts "
                 "JOIN documents d ON d.id = documents_fts.rowid "
                 f"WHERE {where} "
@@ -305,11 +313,13 @@ class Database:
                 SearchHit(
                     document_id=r["document_id"],
                     original_name=r["original_name"],
+                    original_path=r["original_path"],
                     ai_name=r["ai_name"],
                     output_path=r["output_path"],
                     snippet=r["snippet"],
                     # bm25 returns a lower-is-better score; invert for UX
                     score=-float(r["score"]),
+                    page_number=_find_snippet_page(r["body"], r["snippet"]),
                     processed_at=(
                         datetime.fromisoformat(r["processed_at"]) if r["processed_at"] else None
                     ),
@@ -325,6 +335,46 @@ class Database:
             ],
             total,
         )
+
+    def search_passages(
+        self,
+        query: str,
+        *,
+        limit: int = 5,
+    ) -> list[dict[str, object]]:
+        """Return wider, plain-text passages for an FTS5 ``query``.
+
+        Tailored for LLM context: no markup wrapping, larger snippet window
+        than :meth:`search`, ranked by ``bm25``. Returns dicts (not pydantic
+        models) because the caller only needs primitives. Errors from bad
+        FTS5 syntax surface to the caller, which is expected to translate or
+        retry with the literal terms.
+        """
+        if not query.strip():
+            return []
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT d.id AS document_id, d.original_name, d.ai_name, d.output_path, "
+                "snippet(documents_fts, 0, '', '', '…', 64) AS passage, "
+                "bm25(documents_fts) AS score "
+                "FROM documents_fts "
+                "JOIN documents d ON d.id = documents_fts.rowid "
+                "WHERE documents_fts MATCH ? "
+                "ORDER BY score "
+                "LIMIT ?",
+                (query, limit),
+            ).fetchall()
+        return [
+            {
+                "document_id": int(r["document_id"]),
+                "original_name": r["original_name"],
+                "ai_name": r["ai_name"],
+                "output_path": r["output_path"],
+                "passage": r["passage"],
+                "score": -float(r["score"]),
+            }
+            for r in rows
+        ]
 
     def index_health(self) -> dict[str, int]:
         with self._lock:
@@ -484,3 +534,23 @@ def _row_to_job(row: sqlite3.Row) -> JobProgress:
 
 
 __all__ = ["Database", "DocumentStatus"]
+
+
+def _find_snippet_page(body: str, snippet: str) -> int | None:
+    if not body:
+        return None
+    cleaned_snippet = re.sub(r"\[\[([^\]]+)\]\]", r"\1", snippet or "")
+    cleaned_snippet = cleaned_snippet.replace("…", " ").strip()
+    if not cleaned_snippet:
+        return None
+    collapsed = re.sub(r"\s+", " ", cleaned_snippet).lower()
+    lowered_body = body.lower()
+    idx = lowered_body.find(collapsed)
+    if idx < 0:
+        probe = " ".join(collapsed.split(" ")[:6]).strip()
+        if not probe:
+            return None
+        idx = lowered_body.find(probe)
+        if idx < 0:
+            return None
+    return body.count("\f", 0, idx) + 1

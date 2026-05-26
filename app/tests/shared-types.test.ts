@@ -5,8 +5,13 @@
  */
 import { describe, it, expect } from "vitest";
 import type {
+  AgentAnswer,
+  AgentAskRequest,
+  AgentCitation,
   DocumentRow,
   ElectronApi,
+  FeedbackRequest,
+  FeedbackResult,
   HealthDetails,
   JobProgress,
   ProcessRequest,
@@ -57,10 +62,12 @@ describe("shared types contract", () => {
     const h: SearchHit = {
       document_id: 1,
       original_name: "x.pdf",
+      original_path: "C:/in/x.pdf",
       ai_name: "ocr_x",
       output_path: null,
       snippet: "…invoice [[number]] 42…",
       score: 1.0,
+      page_number: 1,
       processed_at: null,
       title: null,
       author: null,
@@ -159,6 +166,28 @@ describe("shared types contract", () => {
     expect(s.active_batch_ids).toContain("batch-1");
   });
 
+  it("FeedbackRequest and FeedbackResult have the expected shapes", () => {
+    const req: FeedbackRequest = {
+      title: "Add dark mode",
+      body: "It would be great to have a dark mode option.",
+      contact: "user@example.com",
+    };
+    expect(req.title).toBe("Add dark mode");
+
+    const resultOk: FeedbackResult = { success: true, issueUrl: "https://github.com/x/y/issues/1" };
+    expect(resultOk.success).toBe(true);
+
+    const resultErr: FeedbackResult = { success: false, error: "API error" };
+    expect(resultErr.error).toBe("API error");
+  });
+
+  it("ElectronApi exposes submitFeedback", () => {
+    const api: Pick<ElectronApi, "submitFeedback"> = {
+      submitFeedback: async () => ({ success: true }),
+    };
+    expect(api.submitFeedback).toBeTypeOf("function");
+  });
+
   it("ElectronApi sidecar exposes recovery and health-detail methods", () => {
     const sidecar: ElectronApi["sidecar"] = {
       health: async () => ({ status: "ok", version: "0.1.0" }),
@@ -253,10 +282,20 @@ describe("shared types contract", () => {
         batch_id: null,
         reason: null,
       }),
+      agent: {
+        ask: async (question: string) => ({
+          question,
+          answer: "stub",
+          queries: [question],
+          citations: [],
+          model_available: true,
+        }),
+      },
     };
     expect(sidecar.retryFailedBatch).toBeTypeOf("function");
     expect(sidecar.watchStatus).toBeTypeOf("function");
     expect(sidecar.watchScanNow).toBeTypeOf("function");
+    expect(sidecar.agent.ask).toBeTypeOf("function");
   });
 
   it("SidecarDiagnostics carries the fields the renderer surfaces on failure", () => {
@@ -295,5 +334,26 @@ describe("shared types contract", () => {
     };
     expect(updater.setEnabled).toBeTypeOf("function");
     expect(updater.onStatus).toBeTypeOf("function");
+  });
+
+  it("AgentAskRequest, AgentCitation, and AgentAnswer define the agent contract", () => {
+    const req: AgentAskRequest = { question: "What is the invoice total?" };
+    const citation: AgentCitation = {
+      document_id: 7,
+      original_name: "invoice.pdf",
+      ai_name: "Invoice 2024 Acme",
+      output_path: "C:/out/invoice.pdf",
+      passage: "…total $1,234 due March 2024…",
+    };
+    const answer: AgentAnswer = {
+      question: req.question,
+      answer: "The total is $1,234.",
+      queries: ["invoice", "total"],
+      citations: [citation],
+      model_available: true,
+    };
+    expect(answer.citations[0].document_id).toBe(7);
+    expect(answer.queries.length).toBeGreaterThan(0);
+    expect(typeof answer.model_available).toBe("boolean");
   });
 });
