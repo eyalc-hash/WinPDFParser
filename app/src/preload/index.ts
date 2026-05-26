@@ -5,6 +5,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import { IPC, type SidecarRequest, type SidecarResponse } from "@shared/ipc";
 import type {
+  AgentAnswer,
   DocumentList,
   ElectronApi,
   HealthResponse,
@@ -118,6 +119,14 @@ const api: ElectronApi = {
         path: "/recovery/retry-failed",
         query: { limit },
       }),
+    agent: {
+      ask: (question: string) =>
+        callSidecar<AgentAnswer>({
+          method: "POST",
+          path: "/agent/ask",
+          body: { question },
+        }),
+    },
   },
 };
 
