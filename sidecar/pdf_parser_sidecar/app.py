@@ -26,11 +26,14 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from . import __version__
+from .agent import compose_answer, derive_queries, gather_passages
 from .config import Config
 from .db import Database
 from .llm import OllamaClient
 from .logging_setup import configure_logging
 from .models import (
+    AgentAnswer,
+    AgentAskRequest,
     ClearTempResponse,
     DocumentList,
     DocumentSort,
@@ -308,6 +311,26 @@ def create_app(config: Config) -> FastAPI:
             skipped_non_retryable=skipped_non_retryable,
             skipped_retry_limit=skipped_retry_limit,
             job_ids=job_ids,
+        )
+
+    # ---- agent ------------------------------------------------------------
+
+    @app.post("/agent/ask", response_model=AgentAnswer)
+    async def agent_ask(req: AgentAskRequest) -> AgentAnswer:
+        question = req.question.strip()
+        if not question:
+            raise HTTPException(status_code=422, detail="question must not be empty")
+        settings = await get_settings()
+        model = settings.model or db.get_setting("model") or config.default_model
+        queries = derive_queries(question, ollama=ollama, model=model)
+        citations = gather_passages(db, queries)
+        answer, model_available = compose_answer(question, citations, ollama=ollama, model=model)
+        return AgentAnswer(
+            question=question,
+            answer=answer,
+            queries=queries,
+            citations=citations,
+            model_available=model_available,
         )
 
     # ---- fallback error handler -------------------------------------------

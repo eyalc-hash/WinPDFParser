@@ -141,6 +141,26 @@ export interface IndexHealth {
   orphaned_fts_rows: number;
 }
 
+export interface AgentAskRequest {
+  question: string;
+}
+
+export interface AgentCitation {
+  document_id: number;
+  original_name: string;
+  ai_name: string | null;
+  output_path: string | null;
+  passage: string;
+}
+
+export interface AgentAnswer {
+  question: string;
+  answer: string;
+  queries: string[];
+  citations: AgentCitation[];
+  model_available: boolean;
+}
+
 export interface OcrToolsStatus {
   has_ocrmypdf_package: boolean;
   tesseract_available: boolean;
@@ -257,6 +277,9 @@ export interface ElectronApi {
       skipped_retry_limit: number;
       job_ids: string[];
     }>;
+    agent: {
+      ask: (question: string) => Promise<AgentAnswer>;
+    };
   };
 }
 

@@ -163,3 +163,23 @@ class RetryFailedBatchResponse(BaseModel):
     skipped_non_retryable: int
     skipped_retry_limit: int
     job_ids: list[str]
+
+
+class AgentAskRequest(BaseModel):
+    question: str = Field(min_length=1)
+
+
+class AgentCitation(BaseModel):
+    document_id: int
+    original_name: str
+    ai_name: str | None = None
+    output_path: str | None = None
+    passage: str
+
+
+class AgentAnswer(BaseModel):
+    question: str
+    answer: str
+    queries: list[str]
+    citations: list[AgentCitation]
+    model_available: bool

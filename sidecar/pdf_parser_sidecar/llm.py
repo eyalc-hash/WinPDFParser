@@ -53,6 +53,33 @@ class OllamaClient:
         except httpx.HTTPError:
             return False
 
+    def complete(self, prompt: str, *, model: str) -> str | None:
+        """Generic text-completion call against Ollama's ``/api/generate``.
+
+        Returns the raw model response string on success, or ``None`` if the
+        model/server is unavailable or returned malformed output. Callers are
+        expected to degrade gracefully — e.g. the agent endpoint falls back to
+        a deterministic answer when the LLM is offline.
+        """
+        if not prompt.strip():
+            return None
+        try:
+            r = httpx.post(
+                f"{self.base_url}/api/generate",
+                json={"model": model, "prompt": prompt, "stream": False},
+                timeout=self.timeout,
+            )
+            r.raise_for_status()
+            payload = r.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            logger.info("Ollama complete() failed (%s)", exc)
+            return None
+        response = payload.get("response") if isinstance(payload, dict) else None
+        if not isinstance(response, str):
+            return None
+        text = response.strip()
+        return text or None
+
     def generate_filename(
         self,
         text: str,

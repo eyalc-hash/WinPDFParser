@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Agent } from "./components/Agent";
 import { Library } from "./components/Library";
 import { Search } from "./components/Search";
 import { SettingsDrawer } from "./components/Settings";
@@ -7,7 +8,7 @@ import { UpdateBanner } from "./components/UpdateBanner";
 import { Button } from "./components/ui/Button";
 import type { SidecarDiagnostics } from "../shared/types";
 
-type Tab = "library" | "search";
+type Tab = "library" | "search" | "agent";
 
 export function App(): JSX.Element {
   const [tab, setTab] = useState<Tab>("library");
@@ -66,6 +67,9 @@ export function App(): JSX.Element {
             <TabButton active={tab === "search"} onClick={() => setTab("search")}>
               Search
             </TabButton>
+            <TabButton active={tab === "agent"} onClick={() => setTab("agent")}>
+              Agent
+            </TabButton>
           </nav>
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -95,8 +99,10 @@ export function App(): JSX.Element {
       <main className="flex-1 overflow-hidden">
         {tab === "library" ? (
           <Library refreshKey={refreshKey} />
-        ) : (
+        ) : tab === "search" ? (
           <Search />
+        ) : (
+          <Agent />
         )}
       </main>
 

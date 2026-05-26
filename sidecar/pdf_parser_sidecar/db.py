@@ -336,6 +336,46 @@ class Database:
             total,
         )
 
+    def search_passages(
+        self,
+        query: str,
+        *,
+        limit: int = 5,
+    ) -> list[dict[str, object]]:
+        """Return wider, plain-text passages for an FTS5 ``query``.
+
+        Tailored for LLM context: no markup wrapping, larger snippet window
+        than :meth:`search`, ranked by ``bm25``. Returns dicts (not pydantic
+        models) because the caller only needs primitives. Errors from bad
+        FTS5 syntax surface to the caller, which is expected to translate or
+        retry with the literal terms.
+        """
+        if not query.strip():
+            return []
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT d.id AS document_id, d.original_name, d.ai_name, d.output_path, "
+                "snippet(documents_fts, 0, '', '', '…', 64) AS passage, "
+                "bm25(documents_fts) AS score "
+                "FROM documents_fts "
+                "JOIN documents d ON d.id = documents_fts.rowid "
+                "WHERE documents_fts MATCH ? "
+                "ORDER BY score "
+                "LIMIT ?",
+                (query, limit),
+            ).fetchall()
+        return [
+            {
+                "document_id": int(r["document_id"]),
+                "original_name": r["original_name"],
+                "ai_name": r["ai_name"],
+                "output_path": r["output_path"],
+                "passage": r["passage"],
+                "score": -float(r["score"]),
+            }
+            for r in rows
+        ]
+
     def index_health(self) -> dict[str, int]:
         with self._lock:
             documents_total = int(

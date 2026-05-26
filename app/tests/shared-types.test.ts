@@ -5,6 +5,9 @@
  */
 import { describe, it, expect } from "vitest";
 import type {
+  AgentAnswer,
+  AgentAskRequest,
+  AgentCitation,
   DocumentRow,
   ElectronApi,
   HealthDetails,
@@ -190,8 +193,18 @@ describe("shared types contract", () => {
         skipped_retry_limit: 0,
         job_ids: [],
       }),
+      agent: {
+        ask: async (question: string) => ({
+          question,
+          answer: "stub",
+          queries: [question],
+          citations: [],
+          model_available: true,
+        }),
+      },
     };
     expect(sidecar.retryFailedBatch).toBeTypeOf("function");
+    expect(sidecar.agent.ask).toBeTypeOf("function");
   });
 
   it("SidecarDiagnostics carries the fields the renderer surfaces on failure", () => {
@@ -230,5 +243,26 @@ describe("shared types contract", () => {
     };
     expect(updater.setEnabled).toBeTypeOf("function");
     expect(updater.onStatus).toBeTypeOf("function");
+  });
+
+  it("AgentAskRequest, AgentCitation, and AgentAnswer define the agent contract", () => {
+    const req: AgentAskRequest = { question: "What is the invoice total?" };
+    const citation: AgentCitation = {
+      document_id: 7,
+      original_name: "invoice.pdf",
+      ai_name: "Invoice 2024 Acme",
+      output_path: "C:/out/invoice.pdf",
+      passage: "…total $1,234 due March 2024…",
+    };
+    const answer: AgentAnswer = {
+      question: req.question,
+      answer: "The total is $1,234.",
+      queries: ["invoice", "total"],
+      citations: [citation],
+      model_available: true,
+    };
+    expect(answer.citations[0].document_id).toBe(7);
+    expect(answer.queries.length).toBeGreaterThan(0);
+    expect(typeof answer.model_available).toBe("boolean");
   });
 });
