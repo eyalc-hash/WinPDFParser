@@ -45,18 +45,28 @@ jobs:
         working-directory: sidecar
         run: pyinstaller pyinstaller.spec
 
+      # electron-builder runs an internal `npm install --omit=dev` inside `app/`
+      # before packaging. Because `app/` is an npm workspace member, that install
+      # would otherwise be evaluated against the whole workspace and prune all
+      # devDependencies (including electron-builder's own `7zip-bin`) from the
+      # hoisted root `node_modules`, causing the build to fail with
+      # `ENOENT chmod node_modules/7zip-bin/win/x64/7za.exe`.
+      #
+      # The previous workaround (setting `npm_config_workspaces=false`) no longer
+      # works: npm >= 11 refuses any command in a workspace-member CWD when that
+      # env var is set, erroring with
+      # `Can not use --no-workspaces and --workspace at the same time`.
+      #
+      # Instead, drop the `workspaces` declaration from the root `package.json`
+      # before packaging. The root `node_modules` is already populated by the
+      # `npm ci` above, and removing the workspace field makes the internal
+      # `npm install --omit=dev` treat `app/` as a standalone package, leaving
+      # the root `node_modules` (and `7zip-bin`) intact.
+      - name: Detach app from npm workspace for packaging
+        run: node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); delete p.workspaces; fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');"
+
       - name: Build Windows installer with electron-builder
         working-directory: app
-        # electron-builder runs an internal `npm install --omit=dev` inside `app/`
-        # before packaging. Because `app/` is an npm workspace member, that install
-        # would otherwise be evaluated against the whole workspace and prune all
-        # devDependencies (including electron-builder's own `7zip-bin`) from the
-        # hoisted root `node_modules`, causing the build to fail with
-        # `ENOENT chmod node_modules/7zip-bin/win/x64/7za.exe`.
-        # Setting `npm_config_workspaces=false` makes that internal install treat
-        # `app/` as a standalone package so the root `node_modules` is left intact.
-        env:
-          npm_config_workspaces: "false"
         run: npm run dist
 
       - name: Upload installer artifact
