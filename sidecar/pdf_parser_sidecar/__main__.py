@@ -15,7 +15,7 @@ import socket
 import sys
 from pathlib import Path
 
-if __package__ in {None, ""}:
+if __package__ in {None, ""} and not getattr(sys, "frozen", False):
     package_dir = Path(__file__).resolve().parent
     package_parent = package_dir.parent
     sys.path = [entry for entry in sys.path if Path(entry or ".").resolve() != package_dir]
