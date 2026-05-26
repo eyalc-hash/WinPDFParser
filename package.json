@@ -1,6 +1,6 @@
 {
   "name": "pdf-parser-monorepo",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "private": true,
   "description": "Local-first Windows desktop app that OCRs PDFs, AI-renames them, and provides full-text search.",
   "workspaces": [
