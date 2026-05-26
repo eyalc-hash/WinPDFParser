@@ -13,11 +13,18 @@ import json
 import os
 import socket
 import sys
+from pathlib import Path
+
+if __package__ in {None, ""} and not getattr(sys, "frozen", False):
+    package_dir = Path(__file__).resolve().parent
+    package_parent = package_dir.parent
+    sys.path = [entry for entry in sys.path if Path(entry or ".").resolve() != package_dir]
+    sys.path.insert(0, str(package_parent))
 
 import uvicorn
 
-from .app import create_app
-from .config import Config
+from pdf_parser_sidecar.app import create_app
+from pdf_parser_sidecar.config import Config
 
 
 def _pick_port() -> int:
