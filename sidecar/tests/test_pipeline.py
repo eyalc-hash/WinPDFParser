@@ -48,7 +48,7 @@ def _write_text_pdf(path: Path, text: str) -> None:
     )
     content = DecodedStreamObject()
     escaped = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-    content.set_data(f"BT /F1 18 Tf 40 250 Td ({escaped}) Tj ET".encode("utf-8"))
+    content.set_data(f"BT /F1 18 Tf 40 250 Td ({escaped}) Tj ET".encode())
     page[NameObject("/Contents")] = writer._add_object(content)  # noqa: SLF001
     with path.open("wb") as handle:
         writer.write(handle)

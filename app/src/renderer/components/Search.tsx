@@ -383,7 +383,7 @@ function Hit({
             </Button>
           ) : null}
           {hit.output_path ? (
-            <Button variant="ghost" onClick={() => window.api.openPath(hit.output_path)}>
+            <Button variant="ghost" onClick={() => window.api.openPath(hit.output_path!)}>
               Open OCR
             </Button>
           ) : null}

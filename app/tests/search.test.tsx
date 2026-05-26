@@ -108,7 +108,8 @@ describe("Search results actions", () => {
 
     const input = document.querySelector("input[aria-label='Search OCR text']") as HTMLInputElement;
     await act(async () => {
-      input.value = "invoice";
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(input, "invoice");
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
@@ -116,6 +117,7 @@ describe("Search results actions", () => {
       buttonNamed("Search").click();
     });
     await flushEffects();
+    expect(search).toHaveBeenCalled();
 
     expect(document.body.textContent).toContain("Page 3");
     expect(document.body.textContent).toContain("invoice number 42");

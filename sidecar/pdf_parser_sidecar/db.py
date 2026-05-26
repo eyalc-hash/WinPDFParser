@@ -8,9 +8,9 @@ each runs exactly once.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 import threading
-import re
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -18,7 +18,14 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from .models import DocumentRow, DocumentSort, DocumentStatus, JobProgress, SearchHit, SearchRank
+from .models import (
+    DocumentRow,
+    DocumentSort,
+    DocumentStatus,
+    JobProgress,
+    SearchHit,
+    SearchRank,
+)
 
 
 def _utcnow_iso() -> str:
