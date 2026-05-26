@@ -23,7 +23,7 @@ afterEach(() => {
 async function renderWithStatus(status: UpdateStatus): Promise<Root> {
   window.api = {
     updater: {
-      onStatus: (cb) => {
+      onStatus: (cb: (status: UpdateStatus) => void) => {
         cb(status);
         return () => undefined;
       },
