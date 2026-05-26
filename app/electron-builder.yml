@@ -33,6 +33,9 @@ win:
 nsis:
   oneClick: false
   perMachine: false
+  # Publish and apply full NSIS installers for updates so the existing
+  # installation is removed before the new version is installed.
+  differentialPackage: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true

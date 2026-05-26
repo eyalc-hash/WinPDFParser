@@ -5,10 +5,11 @@
  * enabled `auto_update` in Settings. When enabled, this module:
  *   1. Performs an immediate `checkForUpdates()` call.
  *   2. Re-checks every `RECHECK_INTERVAL_MS` while the app is running.
- *   3. Downloads any available update in the background.
+ *   3. Downloads the full NSIS installer for any available update in the
+ *      background.
  *   4. Broadcasts every state change to the renderer over `IPC.UpdaterStatus`,
- *      so the UI can show a banner with a "Restart to install" button that
- *      calls `quitAndInstall()`.
+ *      so the UI can show a banner with an install button that runs the
+ *      installer in silent mode.
  *
  * Privacy: when `enabled === false`, no `electron-updater` method is invoked
  * and no network request is made — see PRIVACY.md.
@@ -40,6 +41,7 @@ function configureOnce(): void {
 
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.disableDifferentialDownload = true;
 
   autoUpdater.on("checking-for-update", () => broadcast({ kind: "checking" }));
   autoUpdater.on("update-available", (info) =>
@@ -103,10 +105,11 @@ export async function checkForUpdatesNow(): Promise<void> {
   await safeCheck();
 }
 
-/** Restart the app and install the staged update. */
+/** Restart the app and install the staged update with the full NSIS installer. */
 export function quitAndInstall(): void {
-  // `isSilent=false, isForceRunAfter=true`: show the installer UI, then relaunch.
-  autoUpdater.quitAndInstall(false, true);
+  // `isSilent=true, isForceRunAfter=true`: run the uninstall-then-install update
+  // flow without prompting, then relaunch.
+  autoUpdater.quitAndInstall(true, true);
 }
 
 /** For tests/diagnostics. */
@@ -130,4 +133,3 @@ async function safeCheck(): Promise<void> {
 export async function checkForUpdatesIfEnabled(enabledFlag: boolean): Promise<void> {
   await setAutoUpdateEnabled(enabledFlag);
 }
-
