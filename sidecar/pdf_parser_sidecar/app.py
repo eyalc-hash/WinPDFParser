@@ -50,9 +50,12 @@ from .models import (
     SearchRank,
     SearchResponse,
     SettingsModel,
+    WatchScanResponse,
+    WatchStatusResponse,
 )
 from .ocr import ocr_tool_status
 from .queue import JobManager, reconcile_on_startup
+from .watcher import FolderWatcher, settings_loader_from_db
 
 
 def create_app(config: Config) -> FastAPI:
@@ -61,13 +64,26 @@ def create_app(config: Config) -> FastAPI:
     reconcile_on_startup(db)
     ollama = OllamaClient(base_url=config.ollama_url)
     jobs = JobManager(config, db, ollama)
+    default_settings = SettingsModel(
+        ollama_url=config.ollama_url,
+        model=config.default_model,
+        max_concurrent_jobs=config.max_concurrent_jobs,
+    )
+    watcher = FolderWatcher(
+        config=config,
+        db=db,
+        jobs=jobs,
+        settings_loader=settings_loader_from_db(db, default_settings),
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await jobs.restore_pending()
+        await watcher.start()
         try:
             yield
         finally:
+            await watcher.stop()
             await jobs.shutdown()
             db.close()
 
@@ -75,6 +91,7 @@ def create_app(config: Config) -> FastAPI:
     app.state.config = config
     app.state.db = db
     app.state.jobs = jobs
+    app.state.watcher = watcher
 
     # ---- health -----------------------------------------------------------
 
@@ -109,6 +126,7 @@ def create_app(config: Config) -> FastAPI:
                 ocr_language=settings.ocr_language,
                 max_concurrent_jobs=settings.max_concurrent_jobs,
                 model=model,
+                trigger="manual",
             )
         except FileNotFoundError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -120,10 +138,17 @@ def create_app(config: Config) -> FastAPI:
         return JobList(items=jobs.list_active())
 
     @app.get("/jobs/{job_id}", response_model=JobProgress)
-    async def get_job(job_id: str) -> JobProgress:
-        snap = jobs.snapshot(job_id)
+    async def get_job(
+        job_id: str,
+        include_files: bool = Query(False),
+        files_offset: int = Query(0, ge=0),
+        files_limit: int = Query(200, ge=1, le=2000),
+    ) -> JobProgress:
+        snap = jobs.snapshot(job_id, include_files=include_files)
         if snap is None:
             raise HTTPException(status_code=404, detail="job not found")
+        if include_files and snap.files is not None:
+            snap.files = snap.files[files_offset : files_offset + files_limit]
         return snap
 
     @app.post("/jobs/{job_id}/cancel")
@@ -308,6 +333,35 @@ def create_app(config: Config) -> FastAPI:
             skipped_non_retryable=skipped_non_retryable,
             skipped_retry_limit=skipped_retry_limit,
             job_ids=job_ids,
+        )
+
+    # ---- watch ------------------------------------------------------------
+
+    @app.get("/watch/status", response_model=WatchStatusResponse)
+    async def watch_status() -> WatchStatusResponse:
+        snap = watcher.status()
+        return WatchStatusResponse(
+            enabled=snap.enabled,
+            interval_seconds=snap.interval_seconds,
+            input_folder=snap.input_folder,
+            output_folder=snap.output_folder,
+            last_scan_at=snap.last_scan_at,
+            last_scan_new_files=snap.last_scan_new_files,
+            last_scan_error=snap.last_scan_error,
+            next_scan_at=snap.next_scan_at,
+            active_jobs=snap.active_jobs,
+            active_batch_ids=list(snap.active_batch_ids),
+        )
+
+    @app.post("/watch/scan-now", response_model=WatchScanResponse)
+    async def watch_scan_now() -> WatchScanResponse:
+        detected, job_ids, batch_id, reason = await watcher.scan_now()
+        return WatchScanResponse(
+            triggered=bool(job_ids),
+            detected=detected,
+            job_ids=job_ids,
+            batch_id=batch_id,
+            reason=reason,
         )
 
     # ---- fallback error handler -------------------------------------------

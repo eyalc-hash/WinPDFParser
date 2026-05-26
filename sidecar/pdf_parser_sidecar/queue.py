@@ -15,7 +15,7 @@ from pathlib import Path
 from .config import Config
 from .db import Database
 from .llm import OllamaClient
-from .models import JobProgress
+from .models import JobFileEntry, JobProgress, JobTrigger
 from .ocr import run_ocr, sha256_of_file
 from .sanitize import resolve_collision, sanitize_filename, with_ocr_prefix
 
@@ -32,6 +32,7 @@ class _JobState:
     output_folder: Path
     model: str
     progress: JobProgress
+    file_entries: list[JobFileEntry] = field(default_factory=list)
     cancelled: bool = False
     task: asyncio.Task[None] | None = field(default=None, repr=False)
 
@@ -64,6 +65,11 @@ def _validate_user_folder(folder: Path, *, kind: str) -> Path:
     if not resolved.is_absolute():
         raise ValueError(f"{kind} folder must be an absolute path: {folder}")
     return resolved
+
+
+def list_pdfs(folder: Path) -> list[Path]:
+    """Public alias for ``_list_pdfs`` used by the folder watcher."""
+    return _list_pdfs(folder)
 
 
 def _list_pdfs(folder: Path) -> list[Path]:
@@ -99,9 +105,15 @@ class JobManager:
         ocr_language: str,
         max_concurrent_jobs: int,
         model: str,
+        trigger: JobTrigger = "manual",
+        batch_id: str | None = None,
+        files_override: list[Path] | None = None,
     ) -> tuple[str, int]:
-        safe_input = _validate_user_folder(input_folder, kind="input")
-        files = _list_pdfs(safe_input)
+        if files_override is not None:
+            files = list(files_override)
+        else:
+            safe_input = _validate_user_folder(input_folder, kind="input")
+            files = _list_pdfs(safe_input)
         return await self._enqueue(
             files=files,
             output_folder=output_folder,
@@ -110,6 +122,8 @@ class JobManager:
             ocr_language=ocr_language,
             max_concurrent_jobs=max_concurrent_jobs,
             model=model,
+            trigger=trigger,
+            batch_id=batch_id,
         )
 
     async def submit_single(
@@ -140,6 +154,8 @@ class JobManager:
             ocr_language=ocr_language,
             max_concurrent_jobs=max_concurrent_jobs,
             model=model,
+            trigger="manual",
+            batch_id=None,
         )
         return job_id
 
@@ -154,12 +170,30 @@ class JobManager:
         self._persist_queue_state()
         return True
 
-    def snapshot(self, job_id: str) -> JobProgress | None:
+    def snapshot(self, job_id: str, *, include_files: bool = False) -> JobProgress | None:
         state = self._jobs.get(job_id)
-        return state.progress.model_copy() if state else None
+        if state is None:
+            return None
+        snap = state.progress.model_copy()
+        if include_files:
+            snap.files = [entry.model_copy() for entry in state.file_entries]
+        return snap
 
     def list_active(self) -> list[JobProgress]:
         return [s.progress.model_copy() for s in self._jobs.values()]
+
+    def known_paths(self) -> set[str]:
+        """Absolute paths currently tracked by any non-terminal job.
+
+        Used by the folder watcher to skip files already queued or in flight.
+        """
+        active: set[str] = set()
+        for state in self._jobs.values():
+            if state.progress.state in ("done", "failed", "cancelled"):
+                continue
+            for path in state.files:
+                active.add(str(Path(path).resolve(strict=False)))
+        return active
 
     async def shutdown(self) -> None:
         """Cancel everything in flight (called from app lifespan)."""
@@ -212,6 +246,10 @@ class JobManager:
                 progress.state = "queued"
                 progress.current_file = None
                 progress.finished_at = None
+                progress.files = None
+                file_entries = [
+                    JobFileEntry(path=str(path), name=path.name, state="queued") for path in files
+                ]
                 state = _JobState(
                     job_id=job_id,
                     files=files,
@@ -221,6 +259,7 @@ class JobManager:
                     output_folder=Path(output_folder_raw),
                     model=str(entry.get("model") or self.config.default_model),
                     progress=progress,
+                    file_entries=file_entries,
                 )
                 self._jobs[job_id] = state
                 self.db.upsert_job(progress)
@@ -242,6 +281,8 @@ class JobManager:
         ocr_language: str,
         max_concurrent_jobs: int,
         model: str,
+        trigger: JobTrigger = "manual",
+        batch_id: str | None = None,
     ) -> tuple[str, int]:
         safe_output = _validate_user_folder(output_folder, kind="output")
         safe_output.mkdir(parents=True, exist_ok=True)
@@ -255,7 +296,10 @@ class JobManager:
             failed=0,
             current_file=None,
             state="queued",
+            trigger=trigger,
+            batch_id=batch_id,
         )
+        file_entries = [JobFileEntry(path=str(pdf), name=pdf.name, state="queued") for pdf in files]
         state = _JobState(
             job_id=job_id,
             files=files,
@@ -265,6 +309,7 @@ class JobManager:
             output_folder=safe_output,
             model=model,
             progress=progress,
+            file_entries=file_entries,
         )
         async with self._lock:
             self._jobs[job_id] = state
@@ -280,22 +325,28 @@ class JobManager:
             self.db.upsert_job(state.progress)
             self._persist_queue_state()
 
-            for pdf in state.files:
+            for index, pdf in enumerate(state.files):
                 if state.cancelled:
                     state.progress.state = "cancelled"
                     break
                 state.progress.current_file = pdf.name
+                if index < len(state.file_entries):
+                    state.file_entries[index].state = "processing"
                 self.db.upsert_job(state.progress)
                 self._persist_queue_state()
                 try:
-                    await asyncio.to_thread(self._process_one, state, pdf)
+                    await asyncio.to_thread(self._process_one, state, pdf, index)
                 except Exception as exc:  # noqa: BLE001
                     logger.exception("processing failed for %s", pdf)
                     state.progress.failed += 1
+                    if index < len(state.file_entries):
+                        state.file_entries[index].state = "failed"
+                        state.file_entries[index].error = repr(exc)
                     self.db.upsert_job(state.progress)
                     self._persist_queue_state()
-                    _ = exc
 
+            # Any files we didn't reach (cancelled mid-batch) stay "queued";
+            # the UI treats them as not-yet-processed.
             if state.progress.state != "cancelled":
                 state.progress.state = "done"
             state.progress.current_file = None
@@ -303,15 +354,21 @@ class JobManager:
             self.db.upsert_job(state.progress)
             self._persist_queue_state()
 
-    def _process_one(self, state: _JobState, pdf: Path) -> None:
+    def _process_one(self, state: _JobState, pdf: Path, index: int) -> None:
+        entry = state.file_entries[index] if 0 <= index < len(state.file_entries) else None
         content_hash = sha256_of_file(pdf)
         existing = self.db.get_by_hash(content_hash)
         if existing and existing.status == "done" and not state.force:
             state.progress.skipped += 1
             self.db.mark_skipped(existing.id)
+            if entry is not None:
+                entry.state = "skipped"
+                entry.document_id = existing.id
             return
 
         document_id = self.db.upsert_pending(content_hash, str(pdf), pdf.name)
+        if entry is not None:
+            entry.document_id = document_id
 
         try:
             # Use a temp output name first so a crash doesn't leak a final-named file.
@@ -353,9 +410,13 @@ class JobManager:
                 source_created_at=ocr_result.source_created_at,
             )
             state.progress.processed += 1
+            if entry is not None:
+                entry.state = "done"
         except Exception as exc:  # noqa: BLE001
             category, retryable = _classify_failure(exc)
             self.db.mark_failed(document_id, repr(exc), category=category, retryable=retryable)
+            if entry is not None:
+                entry.error = repr(exc)
             raise
 
     def _apply_runtime_concurrency_limit(self, requested: int) -> None:
@@ -390,7 +451,7 @@ def reconcile_on_startup(db: Database) -> int:
     return db.reconcile_interrupted()
 
 
-__all__ = ["JobManager", "reconcile_on_startup"]
+__all__ = ["JobManager", "reconcile_on_startup", "list_pdfs"]
 
 
 def _classify_failure(exc: Exception) -> tuple[str, bool]:
