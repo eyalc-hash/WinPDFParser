@@ -19,14 +19,8 @@ const settings: SettingsModel = {
   watch_interval_seconds: 60,
 };
 
-const listFailedDocuments = vi.fn<
-  Parameters<ElectronApi["sidecar"]["listFailedDocuments"]>,
-  ReturnType<ElectronApi["sidecar"]["listFailedDocuments"]>
->();
-const retryDocument = vi.fn<
-  Parameters<ElectronApi["sidecar"]["retryDocument"]>,
-  ReturnType<ElectronApi["sidecar"]["retryDocument"]>
->();
+const listFailedDocuments = vi.fn<ElectronApi["sidecar"]["listFailedDocuments"]>();
+const retryDocument = vi.fn<ElectronApi["sidecar"]["retryDocument"]>();
 
 beforeEach(() => {
   listFailedDocuments.mockResolvedValue({ items: makeFailures(), total: 2 });

@@ -28,7 +28,8 @@ win:
   artifactName: "PDF-Parser-Setup-${version}.${ext}"
   # Code-signing: leave env vars unset for unsigned dev builds. Setting
   # CSC_LINK + CSC_KEY_PASSWORD in CI flips on signing without code changes.
-  signingHashAlgorithms: ["sha256"]
+  signtoolOptions:
+    signingHashAlgorithms: ["sha256"]
 
 nsis:
   oneClick: false

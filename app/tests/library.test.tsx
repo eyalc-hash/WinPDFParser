@@ -6,14 +6,8 @@ import { Library } from "../src/renderer/components/Library";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const listDocuments = vi.fn<
-  Parameters<ElectronApi["sidecar"]["listDocuments"]>,
-  ReturnType<ElectronApi["sidecar"]["listDocuments"]>
->();
-const retryDocument = vi.fn<
-  Parameters<ElectronApi["sidecar"]["retryDocument"]>,
-  ReturnType<ElectronApi["sidecar"]["retryDocument"]>
->();
+const listDocuments = vi.fn<ElectronApi["sidecar"]["listDocuments"]>();
+const retryDocument = vi.fn<ElectronApi["sidecar"]["retryDocument"]>();
 
 beforeEach(() => {
   listDocuments.mockImplementation(async () => ({ items: makeDocs(50), total: 137 }));

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-05-26
+
+### Fixed
+
+- Updated Electron, electron-builder, electron-vite, Vite, Vitest, and the React Vite plugin to resolve npm audit findings.
+- Updated Vitest mock typing in renderer tests for compatibility with the current Vitest type definitions.
+- Renamed ESM Tailwind and PostCSS config files to `.mjs` so Vite no longer reparses them as ambiguous JavaScript modules.
+
 ## [0.1.0] - 2025-XX-XX
 
 ### Added
