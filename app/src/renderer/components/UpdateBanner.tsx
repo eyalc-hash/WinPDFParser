@@ -7,8 +7,8 @@ import { Button } from "./ui/Button";
  * AND something interesting is happening (a check is running, an update is
  * being downloaded, an update is ready to install, or the last check errored).
  *
- * When an update has been downloaded, shows a "Restart to install" button
- * that triggers `quitAndInstall()` in the main process.
+ * When an update has been downloaded, shows an install button that triggers the
+ * main-process full installer flow.
  */
 export function UpdateBanner(): JSX.Element | null {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
@@ -47,7 +47,7 @@ export function UpdateBanner(): JSX.Element | null {
       <span className="truncate">{renderMessage(status)}</span>
       {status.kind === "downloaded" ? (
         <Button variant="primary" disabled={restarting} onClick={() => void restart()}>
-          {restarting ? "Restarting…" : `Restart to install v${status.version ?? ""}`.trim()}
+          {restarting ? "Installing…" : `Install update v${status.version ?? ""}`.trim()}
         </Button>
       ) : null}
     </div>
