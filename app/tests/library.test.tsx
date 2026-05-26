@@ -21,6 +21,7 @@ beforeEach(() => {
   window.api = {
     pickFolder: vi.fn(),
     openPath: vi.fn(),
+    openPdfAtPage: vi.fn(),
     revealInFolder: vi.fn(),
     openAppDataFolder: vi.fn(),
     exportDiagnostics: vi.fn(),

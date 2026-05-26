@@ -9,8 +9,8 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
         ref={ref}
         {...rest}
         className={
-          "h-9 w-full rounded-md border border-border bg-background px-3 text-sm " +
-          "placeholder:text-muted-foreground focus:border-primary focus:outline-none " +
+          "h-9 w-full rounded-md border border-border bg-background px-3 text-sm shadow-sm " +
+          "placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 " +
           className
         }
       />

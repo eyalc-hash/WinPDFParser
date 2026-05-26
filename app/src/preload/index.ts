@@ -39,6 +39,7 @@ async function callSidecar<T>(req: SidecarRequest): Promise<T> {
 const api: ElectronApi = {
   pickFolder: (kind) => ipcRenderer.invoke(IPC.PickFolder, kind),
   openPath: (path) => ipcRenderer.invoke(IPC.OpenPath, path),
+  openPdfAtPage: (path, page) => ipcRenderer.invoke(IPC.OpenPdfAtPage, path, page),
   revealInFolder: (path) => ipcRenderer.invoke(IPC.RevealInFolder, path),
   openAppDataFolder: () => ipcRenderer.invoke(IPC.OpenAppData),
   exportDiagnostics: () => ipcRenderer.invoke(IPC.ExportDiagnostics),

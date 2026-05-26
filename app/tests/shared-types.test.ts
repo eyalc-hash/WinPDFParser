@@ -55,10 +55,12 @@ describe("shared types contract", () => {
     const h: SearchHit = {
       document_id: 1,
       original_name: "x.pdf",
+      original_path: "C:/in/x.pdf",
       ai_name: "ocr_x",
       output_path: null,
       snippet: "…invoice [[number]] 42…",
       score: 1.0,
+      page_number: 1,
       processed_at: null,
       title: null,
       author: null,

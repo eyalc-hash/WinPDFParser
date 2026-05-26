@@ -70,7 +70,7 @@ def _extract_text_pypdf(pdf: Path) -> tuple[str, int, str | None, str | None, st
         created = str(metadata.get("/CreationDate") or "").strip() or None
         if created and created.startswith("D:"):
             created = created[2:]
-        return "\n\n".join(pages), len(reader.pages), title, author, created
+        return "\f".join(pages), len(reader.pages), title, author, created
     except Exception as exc:  # noqa: BLE001
         logger.warning("pypdf text extraction failed for %s: %s", pdf, exc)
         return "", 0, None, None, None
