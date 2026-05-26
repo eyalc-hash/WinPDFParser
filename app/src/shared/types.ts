@@ -164,6 +164,41 @@ export interface SidecarDiagnostics {
   logFile: string | null;
 }
 
+/**
+ * Auto-update lifecycle, broadcast from the Electron main process to the
+ * renderer. The renderer never talks to `electron-updater` directly.
+ *
+ *   idle       → updater disabled or no check in flight.
+ *   checking   → a check is in flight against the configured feed.
+ *   not-available → check completed; we are on the latest version.
+ *   available  → a newer version exists; download is starting in the background.
+ *   downloading → bytes are flowing; `percent` is 0..100.
+ *   downloaded → new version is staged on disk; user can restart to install.
+ *   error      → the last check or download failed (network, bad feed, etc.).
+ */
+export type UpdateStatusKind =
+  | "idle"
+  | "checking"
+  | "not-available"
+  | "available"
+  | "downloading"
+  | "downloaded"
+  | "error";
+
+export interface UpdateStatus {
+  kind: UpdateStatusKind;
+  /** Version string for `available`, `downloading`, `downloaded`. */
+  version?: string;
+  /** 0..100 for `downloading`. */
+  percent?: number;
+  /** Bytes / second for `downloading`. */
+  bytesPerSecond?: number;
+  /** Human-readable message for `error`. */
+  message?: string;
+  /** Whether auto-update is currently enabled (opt-in by user). */
+  enabled: boolean;
+}
+
 /** Surface exposed by `preload` on `window.api`. */
 export interface ElectronApi {
   pickFolder: (kind: "input" | "output") => Promise<string | null>;
@@ -175,6 +210,24 @@ export interface ElectronApi {
   viewer: {
     loadPdf: (path: string) => Promise<string | null>;
     clear: () => Promise<void>;
+  };
+  updater: {
+    /**
+     * Enable or disable auto-update checks at runtime. Mirrors the user's
+     * `auto_update` setting; the renderer should call this whenever the
+     * setting is saved so the change takes effect without a restart.
+     */
+    setEnabled: (enabled: boolean) => Promise<void>;
+    /** Trigger an immediate check (only effective when enabled). */
+    checkNow: () => Promise<void>;
+    /** Quit and install the staged update. No-op if nothing is downloaded. */
+    quitAndInstall: () => Promise<void>;
+    /**
+     * Subscribe to status updates pushed from the main process. Returns an
+     * unsubscribe function. The first event is delivered synchronously on
+     * subscribe so the caller always sees the latest state.
+     */
+    onStatus: (cb: (status: UpdateStatus) => void) => () => void;
   };
   sidecar: {
     health: () => Promise<HealthResponse>;

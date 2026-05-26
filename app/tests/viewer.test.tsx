@@ -35,6 +35,12 @@ beforeEach(() => {
     exportDiagnostics: vi.fn(),
     getSidecarDiagnostics: vi.fn(),
     viewer: viewerApi,
+    updater: {
+      setEnabled: vi.fn().mockResolvedValue(undefined),
+      checkNow: vi.fn().mockResolvedValue(undefined),
+      quitAndInstall: vi.fn().mockResolvedValue(undefined),
+      onStatus: vi.fn().mockReturnValue(() => undefined),
+    },
     sidecar: {
       health: vi.fn(),
       process: vi.fn(),

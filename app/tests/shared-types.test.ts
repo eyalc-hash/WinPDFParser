@@ -13,6 +13,7 @@ import type {
   SearchHit,
   SettingsModel,
   SidecarDiagnostics,
+  UpdateStatus,
 } from "../src/shared/types";
 
 describe("shared types contract", () => {
@@ -202,5 +203,30 @@ describe("shared types contract", () => {
     };
     expect(diag.stderrTail.length).toBeGreaterThan(0);
     expect(diag.lastExit?.code).toBe(1);
+  });
+
+  it("UpdateStatus covers the full auto-update lifecycle", () => {
+    const states: UpdateStatus[] = [
+      { kind: "idle", enabled: false },
+      { kind: "checking", enabled: true },
+      { kind: "not-available", enabled: true, version: "0.1.0" },
+      { kind: "available", enabled: true, version: "0.2.0" },
+      { kind: "downloading", enabled: true, version: "0.2.0", percent: 42, bytesPerSecond: 1024 },
+      { kind: "downloaded", enabled: true, version: "0.2.0" },
+      { kind: "error", enabled: true, message: "ENOTFOUND" },
+    ];
+    expect(states.length).toBe(7);
+    expect(states.every((s) => typeof s.enabled === "boolean")).toBe(true);
+  });
+
+  it("ElectronApi exposes the updater surface (setEnabled / checkNow / quitAndInstall / onStatus)", () => {
+    const updater: ElectronApi["updater"] = {
+      setEnabled: async () => undefined,
+      checkNow: async () => undefined,
+      quitAndInstall: async () => undefined,
+      onStatus: () => () => undefined,
+    };
+    expect(updater.setEnabled).toBeTypeOf("function");
+    expect(updater.onStatus).toBeTypeOf("function");
   });
 });

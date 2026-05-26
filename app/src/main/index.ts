@@ -13,7 +13,7 @@ import {
   registerViewerProtocolHandler,
   registerViewerProtocolScheme,
 } from "./ipc";
-import { configureAutoUpdater } from "./updater";
+import { configureAutoUpdater, setAutoUpdateEnabled } from "./updater";
 
 registerViewerProtocolScheme();
 
@@ -74,6 +74,23 @@ async function bootstrap(): Promise<void> {
   registerViewerProtocolHandler();
   registerIpcHandlers(sidecar);
   createWindow();
+  // Honour the user's saved opt-in setting. Fire-and-forget — a failed check
+  // (e.g. offline, missing feed URL in dev) must not block app startup.
+  void enableUpdaterFromSettings();
+}
+
+async function enableUpdaterFromSettings(): Promise<void> {
+  try {
+    const url = new URL("/settings", sidecar.baseUrl);
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const data = (await res.json()) as { auto_update?: unknown };
+    if (data && data.auto_update === true) {
+      await setAutoUpdateEnabled(true);
+    }
+  } catch (err) {
+    process.stderr.write(`[main] updater bootstrap skipped: ${String(err)}\n`);
+  }
 }
 
 app.whenReady().then(bootstrap).catch((err) => {

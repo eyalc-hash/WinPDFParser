@@ -11,6 +11,12 @@ import { pathToFileURL } from "node:url";
 import { BrowserWindow, dialog, ipcMain, shell, app, protocol, net } from "electron";
 import { IPC, type SidecarRequest, type SidecarResponse } from "@shared/ipc";
 import type { SidecarManager } from "./sidecar";
+import {
+  checkForUpdatesNow,
+  getLastUpdateStatus,
+  quitAndInstall,
+  setAutoUpdateEnabled,
+} from "./updater";
 
 const VIEWER_SCHEME = "pdfparser-doc";
 const VIEWER_URL_BASE = `${VIEWER_SCHEME}://current`;
@@ -94,6 +100,24 @@ export function registerIpcHandlers(sidecar: SidecarManager): void {
   });
 
   ipcMain.handle(IPC.SidecarDiagnostics, () => sidecar.getDiagnostics());
+
+  ipcMain.handle(IPC.UpdaterSetEnabled, async (_e, enabled: boolean) => {
+    await setAutoUpdateEnabled(Boolean(enabled));
+  });
+
+  ipcMain.handle(IPC.UpdaterCheckNow, async () => {
+    await checkForUpdatesNow();
+  });
+
+  ipcMain.handle(IPC.UpdaterQuitAndInstall, async () => {
+    quitAndInstall();
+  });
+
+  // Push the current status to any newly-attached renderer so it can render
+  // the banner without waiting for the next state change.
+  ipcMain.on(IPC.UpdaterStatus, (event) => {
+    event.sender.send(IPC.UpdaterStatus, getLastUpdateStatus());
+  });
 }
 
 async function exportDiagnostics(sidecar: SidecarManager): Promise<string> {

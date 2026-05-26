@@ -3,6 +3,7 @@ import { Library } from "./components/Library";
 import { Search } from "./components/Search";
 import { SettingsDrawer } from "./components/Settings";
 import { Processor } from "./components/Processor";
+import { UpdateBanner } from "./components/UpdateBanner";
 import { Button } from "./components/ui/Button";
 import type { SidecarDiagnostics } from "../shared/types";
 
@@ -75,6 +76,8 @@ export function App(): JSX.Element {
           </Button>
         </div>
       </header>
+
+      <UpdateBanner />
 
       {sidecarOnline === false ? (
         <SidecarErrorBanner
