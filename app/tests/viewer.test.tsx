@@ -9,10 +9,12 @@ import { Viewer } from "../src/renderer/components/Viewer";
 const hit: SearchHit = {
   document_id: 1,
   original_name: "invoice.pdf",
+  original_path: "C:/source/invoice.pdf",
   ai_name: "Invoice",
   output_path: "C:/docs/invoice.pdf",
   snippet: "[[invoice]]",
   score: 1,
+  page_number: 2,
   processed_at: null,
   title: null,
   author: null,
@@ -30,6 +32,7 @@ beforeEach(() => {
   window.api = {
     pickFolder: vi.fn(),
     openPath: vi.fn(),
+    openPdfAtPage: vi.fn(),
     revealInFolder: vi.fn(),
     openAppDataFolder: vi.fn(),
     exportDiagnostics: vi.fn(),

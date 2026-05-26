@@ -26,7 +26,7 @@ let currentViewerPdfPath: string | null = null;
 let viewerProtocolRegistered = false;
 
 interface IndexedDocumentList {
-  items: Array<{ output_path: string | null }>;
+  items: Array<{ output_path: string | null; original_path?: string | null }>;
   total: number;
 }
 
@@ -66,6 +66,14 @@ export function registerIpcHandlers(sidecar: SidecarManager): void {
 
   ipcMain.handle(IPC.OpenPath, async (_e, path: string) => {
     await shell.openPath(path);
+  });
+
+  ipcMain.handle(IPC.OpenPdfAtPage, async (_e, rawPath: string, page: number | null) => {
+    const safePath = resolveSafePdfPath(rawPath);
+    if (!safePath) return;
+    const pageNumber = typeof page === "number" && Number.isFinite(page) && page > 0 ? Math.floor(page) : null;
+    const url = pathToFileURL(safePath).toString();
+    await shell.openExternal(pageNumber ? `${url}#page=${pageNumber}` : url);
   });
 
   ipcMain.handle(IPC.RevealInFolder, async (_e, path: string) => {
@@ -222,9 +230,12 @@ async function isIndexedPdfPath(sidecar: SidecarManager, safePath: string): Prom
     total = res.data.total;
     if (
       res.data.items.some((document) => {
-        if (!document.output_path) return false;
-        const indexedPath = resolveSafePdfPath(document.output_path);
-        return indexedPath !== null && samePath(indexedPath, safePath);
+        for (const candidatePath of [document.output_path, document.original_path ?? null]) {
+          if (!candidatePath) continue;
+          const indexedPath = resolveSafePdfPath(candidatePath);
+          if (indexedPath !== null && samePath(indexedPath, safePath)) return true;
+        }
+        return false;
       })
     ) {
       return true;

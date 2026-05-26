@@ -255,7 +255,7 @@ export function Search(): JSX.Element {
 
       <div className="flex-1 overflow-auto px-4 py-3">
         {result ? (
-          <div className="mb-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
             <span>
               {result.total === 0
                 ? `No matches for “${result.query}”.`
@@ -306,6 +306,7 @@ export function Search(): JSX.Element {
           onPrevious={() => navigateViewer("previous")}
           onNext={() => navigateViewer("next")}
           onClose={closeViewer}
+          preferredPath="original"
         />
       ) : null}
     </div>
@@ -342,13 +343,13 @@ function Hit({
       aria-selected={active}
       onFocus={onFocus}
       onKeyDown={(event) => {
-        if ((event.key === "Enter" || event.key === " ") && hit.output_path) {
+        if ((event.key === "Enter" || event.key === " ") && hit.original_path) {
           event.preventDefault();
           onView();
         }
       }}
       className={
-        "mb-3 rounded-md border bg-card/40 p-3 outline-none transition-colors " +
+        "mb-3 rounded-xl border bg-card p-3 outline-none shadow-sm transition-colors " +
         (active ? "border-primary" : "border-border") +
         " focus:border-primary focus:ring-1 focus:ring-primary"
       }
@@ -366,19 +367,29 @@ function Hit({
           </button>
         </h3>
         <div className="flex gap-2">
-          {hit.output_path ? (
+          {hit.page_number ? (
+            <span className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted-foreground">
+              Page {hit.page_number}
+            </span>
+          ) : null}
+          {hit.original_path ? (
             <Button variant="ghost" onClick={onView} aria-label={`View ${title} in app`}>
-              View
+              View match
+            </Button>
+          ) : null}
+          {hit.original_path ? (
+            <Button variant="ghost" onClick={() => window.api.openPdfAtPage(hit.original_path, hit.page_number)}>
+              Open original
             </Button>
           ) : null}
           {hit.output_path ? (
-            <Button variant="ghost" onClick={() => window.api.openPath(hit.output_path!)}>
-              Open
+            <Button variant="ghost" onClick={() => window.api.openPath(hit.output_path)}>
+              Open OCR
             </Button>
           ) : null}
-          {hit.output_path ? (
-            <Button variant="ghost" onClick={() => window.api.revealInFolder(hit.output_path!)}>
-              Reveal
+          {hit.original_path ? (
+            <Button variant="ghost" onClick={() => window.api.revealInFolder(hit.original_path)}>
+              Reveal original
             </Button>
           ) : null}
         </div>

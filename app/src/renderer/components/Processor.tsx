@@ -15,6 +15,7 @@ interface Props {
 export function Processor({ onFinished }: Props): JSX.Element {
   const [input, setInput] = useState<string | null>(null);
   const [output, setOutput] = useState<string | null>(null);
+  const [outputAutoDerived, setOutputAutoDerived] = useState(false);
   const [force, setForce] = useState(false);
   const [rename, setRename] = useState(true);
   const [job, setJob] = useState<JobProgress | null>(null);
@@ -27,8 +28,12 @@ export function Processor({ onFinished }: Props): JSX.Element {
     window.api.sidecar
       .getSettings()
       .then((s) => {
-        setInput(s.input_folder ?? null);
-        setOutput(s.output_folder ?? null);
+        const hydratedInput = s.input_folder ?? null;
+        const defaultOutput = hydratedInput ? deriveDefaultOutputFolder(hydratedInput) : null;
+        const hydratedOutput = s.output_folder ?? defaultOutput;
+        setInput(hydratedInput);
+        setOutput(hydratedOutput);
+        setOutputAutoDerived(Boolean(hydratedInput && hydratedOutput && hydratedOutput === defaultOutput));
         setRename(s.rename_with_llm);
       })
       .catch(() => {
@@ -45,15 +50,30 @@ export function Processor({ onFinished }: Props): JSX.Element {
   const pick = async (kind: "input" | "output"): Promise<void> => {
     const folder = await window.api.pickFolder(kind);
     if (!folder) return;
-    if (kind === "input") setInput(folder);
-    else setOutput(folder);
+    if (kind === "input") {
+      setInput(folder);
+      const derivedOutput = deriveDefaultOutputFolder(folder);
+      const nextOutput = !output || outputAutoDerived ? derivedOutput : output;
+      setOutput(nextOutput);
+      setOutputAutoDerived(nextOutput === derivedOutput);
+    } else {
+      setOutput(folder);
+      setOutputAutoDerived(false);
+    }
     // Persist to settings.
     try {
       const s = await window.api.sidecar.getSettings();
+      const nextInput = kind === "input" ? folder : s.input_folder;
+      const nextOutput =
+        kind === "output"
+          ? folder
+          : !output || outputAutoDerived
+            ? deriveDefaultOutputFolder(folder)
+            : output ?? s.output_folder;
       await window.api.sidecar.putSettings({
         ...s,
-        input_folder: kind === "input" ? folder : s.input_folder,
-        output_folder: kind === "output" ? folder : s.output_folder,
+        input_folder: nextInput,
+        output_folder: nextOutput,
       });
     } catch {
       /* ignore: not fatal */
@@ -62,14 +82,29 @@ export function Processor({ onFinished }: Props): JSX.Element {
 
   const dropFolder = async (kind: "input" | "output", droppedPath: string): Promise<void> => {
     if (!droppedPath) return;
-    if (kind === "input") setInput(droppedPath);
-    else setOutput(droppedPath);
+    if (kind === "input") {
+      setInput(droppedPath);
+      const derivedOutput = deriveDefaultOutputFolder(droppedPath);
+      const nextOutput = !output || outputAutoDerived ? derivedOutput : output;
+      setOutput(nextOutput);
+      setOutputAutoDerived(nextOutput === derivedOutput);
+    } else {
+      setOutput(droppedPath);
+      setOutputAutoDerived(false);
+    }
     try {
       const s = await window.api.sidecar.getSettings();
+      const nextInput = kind === "input" ? droppedPath : s.input_folder;
+      const nextOutput =
+        kind === "output"
+          ? droppedPath
+          : !output || outputAutoDerived
+            ? deriveDefaultOutputFolder(droppedPath)
+            : output ?? s.output_folder;
       await window.api.sidecar.putSettings({
         ...s,
-        input_folder: kind === "input" ? droppedPath : s.input_folder,
-        output_folder: kind === "output" ? droppedPath : s.output_folder,
+        input_folder: nextInput,
+        output_folder: nextOutput,
       });
     } catch {
       /* ignore */
@@ -135,8 +170,25 @@ export function Processor({ onFinished }: Props): JSX.Element {
   const running = job?.state === "running" || job?.state === "queued";
 
   return (
-    <section className="border-b border-border bg-card/40 px-4 py-3">
-      <div className="flex flex-wrap items-center gap-3">
+    <section className="border-b border-border/70 bg-background px-4 py-4">
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold">Run OCR</h2>
+            <p className="text-xs text-muted-foreground">Pick a source folder and start indexing.</p>
+          </div>
+          {running ? (
+            <Button variant="destructive" onClick={cancel}>
+              Cancel
+            </Button>
+          ) : (
+            <Button variant="primary" onClick={run} disabled={!input || !output}>
+              Run OCR
+            </Button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
         <FolderPicker
           label="Input"
           value={input}
@@ -149,6 +201,9 @@ export function Processor({ onFinished }: Props): JSX.Element {
           onPick={() => pick("output")}
           onDropPath={(path) => void dropFolder("output", path)}
         />
+        {outputAutoDerived && output ? (
+          <span className="text-[11px] text-muted-foreground">Default output folder set from input.</span>
+        ) : null}
 
         <label className="flex items-center gap-2 text-xs text-muted-foreground">
           <input
@@ -168,36 +223,26 @@ export function Processor({ onFinished }: Props): JSX.Element {
           />
           AI rename (Ollama)
         </label>
-
-        {running ? (
-          <Button variant="destructive" onClick={cancel}>
-            Cancel
-          </Button>
-        ) : (
-          <Button variant="primary" onClick={run} disabled={!input || !output}>
-            Run OCR
-          </Button>
-        )}
+        </div>
+        {job ? <Progress job={job} /> : null}
+        {notice ? (
+          <p
+            role="status"
+            aria-live="polite"
+            className={
+              "mt-2 text-xs " +
+              (notice.tone === "ok"
+                ? "text-emerald-400"
+                : notice.tone === "warn"
+                  ? "text-amber-300"
+                  : "text-destructive")
+            }
+          >
+            {notice.text}
+          </p>
+        ) : null}
+        {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
       </div>
-
-      {job ? <Progress job={job} /> : null}
-      {notice ? (
-        <p
-          role="status"
-          aria-live="polite"
-          className={
-            "mt-2 text-xs " +
-            (notice.tone === "ok"
-              ? "text-emerald-400"
-              : notice.tone === "warn"
-                ? "text-amber-300"
-                : "text-destructive")
-          }
-        >
-          {notice.text}
-        </p>
-      ) : null}
-      {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
     </section>
   );
 }
@@ -231,7 +276,7 @@ function FolderPicker({
 
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <span className="text-xs font-medium text-muted-foreground">{label}:</span>
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
       <button
         type="button"
         onClick={onPick}
@@ -243,7 +288,7 @@ function FolderPicker({
         onDrop={onDrop}
         title={value ?? "Choose a folder"}
         className={
-          "max-w-[28ch] truncate rounded-md border bg-background px-2 py-1 text-xs hover:bg-muted/50 " +
+          "max-w-[32ch] truncate rounded-lg border bg-background px-3 py-1.5 text-xs hover:bg-muted/50 " +
           (dragOver ? "border-primary ring-1 ring-primary" : "border-border")
         }
       >
@@ -251,6 +296,12 @@ function FolderPicker({
       </button>
     </div>
   );
+}
+
+function deriveDefaultOutputFolder(inputFolder: string): string {
+  const normalized = inputFolder.replace(/[\\/]+$/, "");
+  const separator = normalized.includes("\\") ? "\\" : "/";
+  return `${normalized}${separator}ocr_output`;
 }
 
 function Progress({ job }: { job: JobProgress }): JSX.Element {

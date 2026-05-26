@@ -12,6 +12,8 @@ import contextlib
 from pathlib import Path
 
 import pytest
+from pypdf import PdfWriter
+from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 from pdf_parser_sidecar.config import Config
 from pdf_parser_sidecar.db import Database
@@ -28,6 +30,28 @@ _MINIMAL_PDF = (
     b"0000000053 00000 n \n0000000098 00000 n \n"
     b"trailer<</Size 4/Root 1 0 R>>\nstartxref\n150\n%%EOF\n"
 )
+
+
+def _write_text_pdf(path: Path, text: str) -> None:
+    writer = PdfWriter()
+    page = writer.add_blank_page(width=300, height=300)
+    font = DictionaryObject(
+        {
+            NameObject("/Type"): NameObject("/Font"),
+            NameObject("/Subtype"): NameObject("/Type1"),
+            NameObject("/BaseFont"): NameObject("/Helvetica"),
+        }
+    )
+    font_ref = writer._add_object(font)  # noqa: SLF001 - test fixture generation
+    page[NameObject("/Resources")] = DictionaryObject(
+        {NameObject("/Font"): DictionaryObject({NameObject("/F1"): font_ref})}
+    )
+    content = DecodedStreamObject()
+    escaped = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    content.set_data(f"BT /F1 18 Tf 40 250 Td ({escaped}) Tj ET".encode("utf-8"))
+    page[NameObject("/Contents")] = writer._add_object(content)  # noqa: SLF001
+    with path.open("wb") as handle:
+        writer.write(handle)
 
 
 @pytest.fixture
@@ -149,6 +173,35 @@ async def test_force_reprocesses(
     await _await_job(jobs, j2)
     snap = jobs.snapshot(j2)
     assert snap is not None and snap.processed == 2 and snap.skipped == 0
+
+
+@pytest.mark.asyncio
+async def test_sample_pdf_ocr_and_search_include_location(
+    env: tuple[Config, Database, JobManager, Path, Path],
+) -> None:
+    _, db, jobs, in_folder, out_folder = env
+    target = in_folder / "invoice.pdf"
+    _write_text_pdf(target, "Invoice 2026 payment due")
+
+    job_id, count = await jobs.submit(
+        input_folder=in_folder,
+        output_folder=out_folder,
+        force=False,
+        rename_with_llm=False,
+        ocr_language="eng",
+        max_concurrent_jobs=1,
+        model="dummy",
+    )
+    assert count == 3
+    await _await_job(jobs, job_id)
+
+    hits, total = db.search("invoice")
+    assert total >= 1
+    hit = next((candidate for candidate in hits if candidate.original_name == "invoice.pdf"), None)
+    assert hit is not None
+    assert "[[invoice]]" in hit.snippet.lower()
+    assert hit.original_path.endswith("invoice.pdf")
+    assert hit.page_number == 1
 
 
 @pytest.mark.asyncio

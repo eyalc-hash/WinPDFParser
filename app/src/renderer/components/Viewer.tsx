@@ -13,6 +13,7 @@ interface ViewerProps {
   onNext: () => void | Promise<void>;
   onClose: () => void;
   navigationDisabled?: boolean;
+  preferredPath?: "original" | "output";
 }
 
 export function Viewer({
@@ -26,6 +27,7 @@ export function Viewer({
   onNext,
   onClose,
   navigationDisabled = false,
+  preferredPath = "output",
 }: ViewerProps): JSX.Element {
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -39,23 +41,25 @@ export function Viewer({
     closeButtonRef.current?.focus();
   }, []);
 
+  const pdfPath = preferredPath === "original" ? hit.original_path : (hit.output_path ?? hit.original_path);
+
   useEffect(() => {
     let cancelled = false;
     setPdfUrl(null);
     setLoadError(null);
 
-    if (!hit.output_path) {
-      setLoadError("This search hit does not have an output PDF to display.");
+    if (!pdfPath) {
+      setLoadError("This search hit does not have a PDF to display.");
       return;
     }
 
     setLoading(true);
     window.api.viewer
-      .loadPdf(hit.output_path)
+      .loadPdf(pdfPath)
       .then((url) => {
         if (cancelled) return;
         if (url) {
-          setPdfUrl(url);
+          setPdfUrl(hit.page_number && hit.page_number > 0 ? `${url}#page=${hit.page_number}` : url);
         } else {
           setLoadError("The PDF could not be loaded in the app.");
         }
@@ -70,7 +74,7 @@ export function Viewer({
     return () => {
       cancelled = true;
     };
-  }, [hit.document_id, hit.output_path]);
+  }, [hit.document_id, pdfPath, hit.page_number]);
 
   useEffect(() => {
     return () => {
@@ -138,20 +142,20 @@ export function Viewer({
           >
             Next hit
           </Button>
-          {hit.output_path ? (
+          {pdfPath ? (
             <Button
               variant="ghost"
               aria-label="Reveal PDF in folder"
-              onClick={() => window.api.revealInFolder(hit.output_path!)}
+              onClick={() => window.api.revealInFolder(pdfPath)}
             >
               Reveal in folder
             </Button>
           ) : null}
-          {hit.output_path ? (
+          {pdfPath ? (
             <Button
               variant="ghost"
               aria-label="Open PDF externally"
-              onClick={() => window.api.openPath(hit.output_path!)}
+              onClick={() => window.api.openPdfAtPage(pdfPath, hit.page_number)}
             >
               Open externally
             </Button>

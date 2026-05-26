@@ -52,11 +52,14 @@ export function App(): JSX.Element {
   const onJobFinished = (): void => setRefreshKey((k) => k + 1);
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-4">
-          <h1 className="text-lg font-semibold">PDF-Parser</h1>
-          <nav className="flex gap-1">
+    <div className="flex h-full flex-col bg-background">
+      <header className="flex items-center justify-between border-b border-border/70 bg-card px-4 py-3 shadow-sm">
+        <div className="flex items-center gap-5">
+          <div className="flex items-center gap-2">
+            <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary/15 text-xs font-semibold text-primary">PDF</span>
+            <h1 className="text-lg font-semibold">PDF Parser</h1>
+          </div>
+          <nav className="flex rounded-lg border border-border bg-background p-1">
             <TabButton active={tab === "library"} onClick={() => setTab("library")}>
               Library
             </TabButton>
@@ -67,9 +70,9 @@ export function App(): JSX.Element {
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           {sidecarOnline === null ? <span>sidecar checking…</span> : null}
-          {sidecarOnline === true && version ? <span>sidecar v{version} online</span> : null}
+          {sidecarOnline === true && version ? <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-emerald-300">sidecar v{version} online</span> : null}
           {sidecarOnline === false ? (
-            <span className="text-destructive">sidecar offline — processing/search unavailable</span>
+            <span className="rounded-full bg-destructive/10 px-2 py-1 text-destructive">sidecar offline — processing/search unavailable</span>
           ) : null}
           <Button variant="ghost" onClick={() => setSettingsOpen(true)}>
             Settings
@@ -184,9 +187,9 @@ function TabButton({
       type="button"
       onClick={onClick}
       className={
-        "rounded-md px-3 py-1 text-sm transition-colors " +
+        "rounded-md px-3 py-1.5 text-sm transition-colors " +
         (active
-          ? "bg-muted text-foreground"
+          ? "bg-primary text-primary-foreground"
           : "text-muted-foreground hover:bg-muted/50 hover:text-foreground")
       }
     >

@@ -72,10 +72,12 @@ export interface DocumentListOptions {
 export interface SearchHit {
   document_id: number;
   original_name: string;
+  original_path: string;
   ai_name: string | null;
   output_path: string | null;
   snippet: string;
   score: number;
+  page_number: number | null;
   processed_at: string | null;
   title: string | null;
   author: string | null;
@@ -203,6 +205,7 @@ export interface UpdateStatus {
 export interface ElectronApi {
   pickFolder: (kind: "input" | "output") => Promise<string | null>;
   openPath: (path: string) => Promise<void>;
+  openPdfAtPage: (path: string, page: number | null) => Promise<void>;
   revealInFolder: (path: string) => Promise<void>;
   openAppDataFolder: () => Promise<void>;
   exportDiagnostics: () => Promise<string>;

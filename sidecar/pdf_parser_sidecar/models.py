@@ -68,10 +68,12 @@ class DocumentList(BaseModel):
 class SearchHit(BaseModel):
     document_id: int
     original_name: str
+    original_path: str
     ai_name: str | None
     output_path: str | None
     snippet: str
     score: float
+    page_number: int | None = None
     processed_at: datetime | None = None
     title: str | None = None
     author: str | None = None
