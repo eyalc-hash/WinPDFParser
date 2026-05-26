@@ -6,10 +6,7 @@ import { Agent } from "../src/renderer/components/Agent";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const ask = vi.fn<
-  Parameters<ElectronApi["sidecar"]["agent"]["ask"]>,
-  ReturnType<ElectronApi["sidecar"]["agent"]["ask"]>
->();
+const ask = vi.fn<ElectronApi["sidecar"]["agent"]["ask"]>();
 const openPath = vi.fn();
 
 beforeEach(() => {

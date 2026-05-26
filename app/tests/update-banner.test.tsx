@@ -6,10 +6,7 @@ import type { ElectronApi, UpdateStatus } from "../src/shared/types";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const quitAndInstall = vi.fn<
-  Parameters<ElectronApi["updater"]["quitAndInstall"]>,
-  ReturnType<ElectronApi["updater"]["quitAndInstall"]>
->();
+const quitAndInstall = vi.fn<ElectronApi["updater"]["quitAndInstall"]>();
 
 beforeEach(() => {
   quitAndInstall.mockResolvedValue(undefined);

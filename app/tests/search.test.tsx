@@ -6,10 +6,7 @@ import { Search } from "../src/renderer/components/Search";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const search = vi.fn<
-  Parameters<ElectronApi["sidecar"]["search"]>,
-  ReturnType<ElectronApi["sidecar"]["search"]>
->();
+const search = vi.fn<ElectronApi["sidecar"]["search"]>();
 const openPdfAtPage = vi.fn();
 const viewerLoadPdf = vi.fn();
 
