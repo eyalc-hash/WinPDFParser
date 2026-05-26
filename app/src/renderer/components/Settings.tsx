@@ -164,6 +164,18 @@ export function SettingsDrawer({ onClose }: Props): JSX.Element {
               </p>
             </Field>
 
+            <FolderMonitoring
+              enabled={settings.watch_enabled}
+              intervalSeconds={settings.watch_interval_seconds}
+              onChange={(next) =>
+                setSettings({
+                  ...settings,
+                  watch_enabled: next.enabled,
+                  watch_interval_seconds: next.intervalSeconds,
+                })
+              }
+            />
+
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -351,6 +363,107 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       </label>
       {children}
     </div>
+  );
+}
+
+function FolderMonitoring({
+  enabled,
+  intervalSeconds,
+  onChange,
+}: {
+  enabled: boolean;
+  intervalSeconds: number;
+  onChange: (next: { enabled: boolean; intervalSeconds: number }) => void;
+}): JSX.Element {
+  const [lastScanAt, setLastScanAt] = useState<string | null>(null);
+  const [nextScanAt, setNextScanAt] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const refresh = useCallback(async (): Promise<void> => {
+    try {
+      const s = await window.api.sidecar.watchStatus();
+      setLastScanAt(s.last_scan_at);
+      setNextScanAt(s.next_scan_at);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+    const t = window.setInterval(() => void refresh(), 5000);
+    return () => window.clearInterval(t);
+  }, [refresh]);
+
+  const scanNow = async (): Promise<void> => {
+    setScanning(true);
+    setNotice(null);
+    try {
+      const res = await window.api.sidecar.watchScanNow();
+      setNotice(
+        res.triggered
+          ? `Queued ${res.detected} new file(s) across ${res.job_ids.length} job(s).`
+          : res.reason
+            ? `No new files (${res.reason}).`
+            : "No new files detected.",
+      );
+      await refresh();
+    } catch (err) {
+      setNotice((err as Error).message);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  return (
+    <section className="border-t border-border pt-3">
+      <h3 className="mb-2 text-sm font-semibold">Folder monitoring</h3>
+      <label className="flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={enabled}
+          onChange={(e) => onChange({ enabled: e.target.checked, intervalSeconds })}
+        />
+        Watch the input folder and auto-index new PDFs
+      </label>
+      <p className="ml-6 mt-1 text-xs text-muted-foreground">
+        100% local — no network calls. New PDFs are detected by a periodic scan
+        and deduplicated by SHA-256 hash.
+      </p>
+
+      <div className="mt-2">
+        <Field label="Scan interval (seconds)">
+          <Input
+            type="number"
+            min={10}
+            max={3600}
+            value={intervalSeconds}
+            onChange={(e) =>
+              onChange({
+                enabled,
+                intervalSeconds: Math.max(10, Math.min(3600, Number(e.target.value || 60))),
+              })
+            }
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Allowed range <code>10-3600</code>. Lower values detect drops sooner but use a bit more CPU.
+          </p>
+        </Field>
+      </div>
+
+      <div className="mt-2 flex items-center gap-2">
+        <Button variant="ghost" disabled={scanning} onClick={() => void scanNow()}>
+          {scanning ? "Scanning…" : "Scan now"}
+        </Button>
+        <span className="text-xs text-muted-foreground">
+          Last scan: {lastScanAt ? new Date(lastScanAt).toLocaleTimeString() : "—"}
+          {" · "}
+          Next: {nextScanAt && enabled ? new Date(nextScanAt).toLocaleTimeString() : "—"}
+        </span>
+      </div>
+      {notice ? <p className="mt-1 text-xs text-muted-foreground">{notice}</p> : null}
+    </section>
   );
 }
 

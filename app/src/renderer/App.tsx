@@ -4,6 +4,7 @@ import { Search } from "./components/Search";
 import { SettingsDrawer } from "./components/Settings";
 import { Processor } from "./components/Processor";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { WatchBanner } from "./components/WatchBanner";
 import { Button } from "./components/ui/Button";
 import type { SidecarDiagnostics } from "../shared/types";
 
@@ -88,6 +89,8 @@ export function App(): JSX.Element {
       ) : null}
 
       <Processor onFinished={onJobFinished} />
+
+      <WatchBanner onJobFinished={onJobFinished} />
 
       <main className="flex-1 overflow-hidden">
         {tab === "library" ? (

@@ -47,6 +47,8 @@ describe("shared types contract", () => {
       rename_with_llm: true,
       ocr_language: "eng",
       max_concurrent_jobs: 1,
+      watch_enabled: true,
+      watch_interval_seconds: 60,
     };
     expect(s.model).toMatch(/llama|qwen|mistral|phi/);
   });
@@ -118,6 +120,45 @@ describe("shared types contract", () => {
     expect(details.ocr.real_ocr_ready).toBe(true);
   });
 
+  it("JobProgress carries trigger, batch_id and optional per-file entries", () => {
+    const job: JobProgress = {
+      job_id: "j1",
+      total: 3,
+      processed: 1,
+      skipped: 0,
+      failed: 0,
+      current_file: "b.pdf",
+      state: "running",
+      started_at: null,
+      finished_at: null,
+      trigger: "watch",
+      batch_id: "batch-1",
+      files: [
+        { path: "C:/in/a.pdf", name: "a.pdf", state: "done", error: null, document_id: 7 },
+        { path: "C:/in/b.pdf", name: "b.pdf", state: "processing", error: null, document_id: null },
+        { path: "C:/in/c.pdf", name: "c.pdf", state: "queued", error: null, document_id: null },
+      ],
+    };
+    expect(job.trigger).toBe("watch");
+    expect(job.files?.length).toBe(3);
+  });
+
+  it("WatchStatusResponse mirrors the sidecar contract", () => {
+    const s: import("../src/shared/types").WatchStatusResponse = {
+      enabled: true,
+      interval_seconds: 60,
+      input_folder: "C:/in",
+      output_folder: "C:/out",
+      last_scan_at: null,
+      last_scan_new_files: 0,
+      last_scan_error: null,
+      next_scan_at: null,
+      active_jobs: 0,
+      active_batch_ids: ["batch-1"],
+    };
+    expect(s.active_batch_ids).toContain("batch-1");
+  });
+
   it("ElectronApi sidecar exposes recovery and health-detail methods", () => {
     const sidecar: ElectronApi["sidecar"] = {
       health: async () => ({ status: "ok", version: "0.1.0" }),
@@ -133,6 +174,9 @@ describe("shared types contract", () => {
         state: "queued",
         started_at: null,
         finished_at: null,
+        trigger: "manual",
+        batch_id: null,
+        files: null,
       }),
       cancelJob: async () => ({ cancelled: true }),
       listDocuments: async () => ({ items: [], total: 0 }),
@@ -156,6 +200,8 @@ describe("shared types contract", () => {
         rename_with_llm: true,
         ocr_language: "eng",
         max_concurrent_jobs: 1,
+        watch_enabled: true,
+        watch_interval_seconds: 60,
       }),
       putSettings: async (s) => s,
       ollamaStatus: async () => ({ available: true, url: "http://127.0.0.1:11434" }),
@@ -188,8 +234,29 @@ describe("shared types contract", () => {
         skipped_retry_limit: 0,
         job_ids: [],
       }),
+      watchStatus: async () => ({
+        enabled: true,
+        interval_seconds: 60,
+        input_folder: null,
+        output_folder: null,
+        last_scan_at: null,
+        last_scan_new_files: 0,
+        last_scan_error: null,
+        next_scan_at: null,
+        active_jobs: 0,
+        active_batch_ids: [],
+      }),
+      watchScanNow: async () => ({
+        triggered: false,
+        detected: 0,
+        job_ids: [],
+        batch_id: null,
+        reason: null,
+      }),
     };
     expect(sidecar.retryFailedBatch).toBeTypeOf("function");
+    expect(sidecar.watchStatus).toBeTypeOf("function");
+    expect(sidecar.watchScanNow).toBeTypeOf("function");
   });
 
   it("SidecarDiagnostics carries the fields the renderer surfaces on failure", () => {

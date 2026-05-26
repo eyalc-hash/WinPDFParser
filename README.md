@@ -13,6 +13,9 @@ LLM, and provides full-text search — all without ever touching the network.
 - Originals are **never modified** — outputs go to a separate folder.
 - Processed files are prefixed with `ocr_`.
 - Duplicate PDFs (by SHA-256 content hash) are skipped unless `force` is set.
+- **Background folder monitoring**: the sidecar periodically rescans the
+  configured input folder and auto-indexes new PDFs as they appear — still
+  100% local, deduplicated by SHA-256, and pausable from Settings.
 
 ## Download & install (Windows)
 
