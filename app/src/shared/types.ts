@@ -69,6 +69,12 @@ export interface DocumentListOptions {
   sort?: DocumentSort;
 }
 
+export interface GetJobOptions {
+  includeFiles?: boolean;
+  filesOffset?: number;
+  filesLimit?: number;
+}
+
 export interface SearchHit {
   document_id: number;
   original_name: string;
@@ -101,6 +107,17 @@ export interface SearchOptions {
   rank?: SearchRank;
 }
 
+export type JobTrigger = "manual" | "watch";
+export type JobFileState = "queued" | "processing" | "done" | "skipped" | "failed";
+
+export interface JobFileEntry {
+  path: string;
+  name: string;
+  state: JobFileState;
+  error: string | null;
+  document_id: number | null;
+}
+
 export interface JobProgress {
   job_id: string;
   total: number;
@@ -111,6 +128,10 @@ export interface JobProgress {
   state: JobState;
   started_at: string | null;
   finished_at: string | null;
+  trigger: JobTrigger;
+  batch_id: string | null;
+  /** Only present when fetched with `include_files=true`. */
+  files: JobFileEntry[] | null;
 }
 
 export interface JobList {
@@ -126,6 +147,29 @@ export interface SettingsModel {
   rename_with_llm: boolean;
   ocr_language: string;
   max_concurrent_jobs: number;
+  watch_enabled: boolean;
+  watch_interval_seconds: number;
+}
+
+export interface WatchStatusResponse {
+  enabled: boolean;
+  interval_seconds: number;
+  input_folder: string | null;
+  output_folder: string | null;
+  last_scan_at: string | null;
+  last_scan_new_files: number;
+  last_scan_error: string | null;
+  next_scan_at: string | null;
+  active_jobs: number;
+  active_batch_ids: string[];
+}
+
+export interface WatchScanResponse {
+  triggered: boolean;
+  detected: number;
+  job_ids: string[];
+  batch_id: string | null;
+  reason: string | null;
 }
 
 export interface OllamaStatus {
@@ -273,7 +317,7 @@ export interface ElectronApi {
     health: () => Promise<HealthResponse>;
     process: (req: ProcessRequest) => Promise<ProcessAccepted>;
     listJobs: () => Promise<JobList>;
-    getJob: (id: string) => Promise<JobProgress>;
+    getJob: (id: string, options?: GetJobOptions) => Promise<JobProgress>;
     cancelJob: (id: string) => Promise<{ cancelled: boolean }>;
     listDocuments: (options?: DocumentListOptions) => Promise<DocumentList>;
     listFailedDocuments: (limit?: number) => Promise<DocumentList>;
@@ -294,6 +338,8 @@ export interface ElectronApi {
       skipped_retry_limit: number;
       job_ids: string[];
     }>;
+    watchStatus: () => Promise<WatchStatusResponse>;
+    watchScanNow: () => Promise<WatchScanResponse>;
     agent: {
       ask: (question: string) => Promise<AgentAnswer>;
     };

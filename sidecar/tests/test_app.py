@@ -218,12 +218,27 @@ def test_openapi_includes_health_and_recovery_contract(client: TestClient) -> No
     assert "/health/details" in paths
     assert "/recovery/clear-temp" in paths
     assert "/recovery/retry-failed" in paths
+    assert "/watch/status" in paths
+    assert "/watch/scan-now" in paths
 
     schemas = body.get("components", {}).get("schemas", {})
     assert "HealthDetailsResponse" in schemas
     assert "OcrToolsStatus" in schemas
     assert "ClearTempResponse" in schemas
     assert "RetryFailedBatchResponse" in schemas
+    assert "WatchStatusResponse" in schemas
+    assert "WatchScanResponse" in schemas
+    assert "JobFileEntry" in schemas
+    # JobProgress carries the new trigger/batch_id fields.
+    job_progress = schemas.get("JobProgress", {})
+    job_props = job_progress.get("properties", {})
+    assert "trigger" in job_props
+    assert "batch_id" in job_props
+    assert "files" in job_props
+    # SettingsModel carries the watcher controls.
+    settings_props = schemas.get("SettingsModel", {}).get("properties", {})
+    assert "watch_enabled" in settings_props
+    assert "watch_interval_seconds" in settings_props
 
 
 def test_index_health_rebuild_and_optimize(client: TestClient) -> None:
@@ -248,6 +263,44 @@ def test_index_health_rebuild_and_optimize(client: TestClient) -> None:
     optimize = client.post("/maintenance/optimize")
     assert optimize.status_code == 200
     assert optimize.json()["optimized"] is True
+
+
+def test_watch_status_and_scan_now(client: TestClient, tmp_path: Path) -> None:
+    # Default: no folders configured → reports disabled-ish.
+    r = client.get("/watch/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert "enabled" in body
+    assert "interval_seconds" in body
+    assert body["active_jobs"] >= 0
+
+    # Configure folders + enable watcher via settings.
+    in_dir = tmp_path / "watch-in"
+    out_dir = tmp_path / "watch-out"
+    in_dir.mkdir()
+    out_dir.mkdir()
+    settings_body = {
+        "input_folder": str(in_dir),
+        "output_folder": str(out_dir),
+        "model": "llama3.2:3b",
+        "auto_update": False,
+        "ollama_url": "http://127.0.0.1:11434",
+        "rename_with_llm": False,
+        "ocr_language": "eng",
+        "max_concurrent_jobs": 1,
+        "watch_enabled": True,
+        "watch_interval_seconds": 30,
+    }
+    put = client.put("/settings", json=settings_body)
+    assert put.status_code == 200
+
+    # Empty folder → scan reports zero detected.
+    scan = client.post("/watch/scan-now")
+    assert scan.status_code == 200
+    scan_body = scan.json()
+    assert scan_body["detected"] == 0
+    assert scan_body["job_ids"] == []
+    assert scan_body["triggered"] is False
 
 
 def test_recovery_clear_temp_removes_tmp_files(client: TestClient, tmp_path: Path) -> None:

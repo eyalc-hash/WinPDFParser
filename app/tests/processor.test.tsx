@@ -19,6 +19,8 @@ const baseSettings: SettingsModel = {
   rename_with_llm: true,
   ocr_language: "eng",
   max_concurrent_jobs: 1,
+  watch_enabled: true,
+  watch_interval_seconds: 60,
 };
 
 beforeEach(() => {

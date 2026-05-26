@@ -27,3 +27,8 @@
   - [x] Improve sidecar/offline status messaging
   - [x] Add better completion/error feedback around long-running jobs
   - [x] Improve keyboard/accessibility support for search and library views
+- [x] Milestone 7 — Background folder monitoring and smart batching
+  - [x] Sidecar-owned periodic watcher with `/watch/status` and `/watch/scan-now`
+  - [x] Smart batching with shared `batch_id` for large drops
+  - [x] Per-file `JobProgress.files` with expandable real-time UI banner
+  - [x] Settings drawer "Folder monitoring" section + docs/FOLDER_MONITORING.md

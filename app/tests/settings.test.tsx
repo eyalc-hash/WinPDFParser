@@ -15,6 +15,8 @@ const settings: SettingsModel = {
   rename_with_llm: true,
   ocr_language: "eng",
   max_concurrent_jobs: 1,
+  watch_enabled: true,
+  watch_interval_seconds: 60,
 };
 
 const listFailedDocuments = vi.fn<
@@ -97,6 +99,25 @@ beforeEach(() => {
         skipped_non_retryable: 0,
         skipped_retry_limit: 0,
         job_ids: ["a", "b"],
+      }),
+      watchStatus: vi.fn().mockResolvedValue({
+        enabled: true,
+        interval_seconds: 60,
+        input_folder: "C:/in",
+        output_folder: "C:/out",
+        last_scan_at: null,
+        last_scan_new_files: 0,
+        last_scan_error: null,
+        next_scan_at: null,
+        active_jobs: 0,
+        active_batch_ids: [],
+      }),
+      watchScanNow: vi.fn().mockResolvedValue({
+        triggered: false,
+        detected: 0,
+        job_ids: [],
+        batch_id: null,
+        reason: null,
       }),
     },
   } as unknown as ElectronApi;

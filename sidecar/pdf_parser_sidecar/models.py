@@ -89,6 +89,18 @@ class SearchResponse(BaseModel):
     rank: SearchRank = "relevance"
 
 
+JobFileState = Literal["queued", "processing", "done", "skipped", "failed"]
+JobTrigger = Literal["manual", "watch"]
+
+
+class JobFileEntry(BaseModel):
+    path: str
+    name: str
+    state: JobFileState = "queued"
+    error: str | None = None
+    document_id: int | None = None
+
+
 class JobProgress(BaseModel):
     job_id: str
     total: int
@@ -99,6 +111,11 @@ class JobProgress(BaseModel):
     state: Literal["queued", "running", "done", "cancelled", "failed"]
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    trigger: JobTrigger = "manual"
+    batch_id: str | None = None
+    # Only populated on /jobs/{id}?include_files=true. Kept off the default
+    # snapshots so polling a 5k-file job stays cheap.
+    files: list[JobFileEntry] | None = None
 
 
 class JobList(BaseModel):
@@ -114,6 +131,8 @@ class SettingsModel(BaseModel):
     rename_with_llm: bool = True
     ocr_language: str = "eng"
     max_concurrent_jobs: int = Field(default=1, ge=1, le=4)
+    watch_enabled: bool = True
+    watch_interval_seconds: int = Field(default=60, ge=10, le=3600)
 
 
 class ErrorResponse(BaseModel):
@@ -163,6 +182,27 @@ class RetryFailedBatchResponse(BaseModel):
     skipped_non_retryable: int
     skipped_retry_limit: int
     job_ids: list[str]
+
+
+class WatchStatusResponse(BaseModel):
+    enabled: bool
+    interval_seconds: int
+    input_folder: str | None
+    output_folder: str | None
+    last_scan_at: datetime | None = None
+    last_scan_new_files: int = 0
+    last_scan_error: str | None = None
+    next_scan_at: datetime | None = None
+    active_jobs: int = 0
+    active_batch_ids: list[str] = Field(default_factory=list)
+
+
+class WatchScanResponse(BaseModel):
+    triggered: bool
+    detected: int
+    job_ids: list[str]
+    batch_id: str | None = None
+    reason: str | None = None
 
 
 class AgentAskRequest(BaseModel):

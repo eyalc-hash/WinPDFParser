@@ -22,9 +22,12 @@ import type {
   SettingsModel,
   SidecarDiagnostics,
   DocumentListOptions,
+  GetJobOptions,
   SearchOptions,
   IndexHealth,
   UpdateStatus,
+  WatchScanResponse,
+  WatchStatusResponse,
 } from "@shared/types";
 
 async function callSidecar<T>(req: SidecarRequest): Promise<T> {
@@ -73,7 +76,16 @@ const api: ElectronApi = {
     process: (body: ProcessRequest) =>
       callSidecar<ProcessAccepted>({ method: "POST", path: "/process", body }),
     listJobs: () => callSidecar<JobList>({ method: "GET", path: "/jobs" }),
-    getJob: (id) => callSidecar<JobProgress>({ method: "GET", path: `/jobs/${id}` }),
+    getJob: (id, options: GetJobOptions = {}) =>
+      callSidecar<JobProgress>({
+        method: "GET",
+        path: `/jobs/${id}`,
+        query: {
+          include_files: options.includeFiles,
+          files_offset: options.filesOffset,
+          files_limit: options.filesLimit,
+        },
+      }),
     cancelJob: (id) =>
       callSidecar<{ cancelled: boolean }>({ method: "POST", path: `/jobs/${id}/cancel` }),
     listDocuments: ({ limit = 200, offset = 0, status, sort }: DocumentListOptions = {}) =>
@@ -124,6 +136,10 @@ const api: ElectronApi = {
         path: "/recovery/retry-failed",
         query: { limit },
       }),
+    watchStatus: () =>
+      callSidecar<WatchStatusResponse>({ method: "GET", path: "/watch/status" }),
+    watchScanNow: () =>
+      callSidecar<WatchScanResponse>({ method: "POST", path: "/watch/scan-now" }),
     agent: {
       ask: (question: string) =>
         callSidecar<AgentAnswer>({

@@ -24,7 +24,7 @@ export interface SidecarRequest {
   method: SidecarMethod;
   path: string;
   body?: unknown;
-  query?: Record<string, string | number | undefined>;
+  query?: Record<string, string | number | boolean | undefined>;
 }
 
 export interface SidecarResponse<T = unknown> {
