@@ -26,6 +26,7 @@ beforeEach(() => {
     openAppDataFolder: vi.fn(),
     exportDiagnostics: vi.fn(),
     getSidecarDiagnostics: vi.fn(),
+    submitFeedback: vi.fn().mockResolvedValue({ success: true }),
     viewer: {
       loadPdf: vi.fn(),
       clear: vi.fn(),

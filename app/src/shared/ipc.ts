@@ -15,6 +15,7 @@ export const IPC = {
   UpdaterQuitAndInstall: "updater:quit-and-install",
   /** Channel used by main → renderer to push UpdateStatus events. */
   UpdaterStatus: "updater:status",
+  SubmitFeedback: "app:submit-feedback",
 } as const;
 
 export type SidecarMethod = "GET" | "POST" | "PUT" | "DELETE";
