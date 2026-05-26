@@ -85,3 +85,78 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: gh release upload "$RELEASE_TAG" app/release/PDF-Parser-Setup-*.exe --clobber
+
+  bump-minor-version:
+    name: Bump minor version for next release
+    needs: build-windows-installer
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Bump minor version
+        id: bump
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+
+          function readJson(path) {
+            return JSON.parse(fs.readFileSync(path, 'utf8'));
+          }
+
+          function writeJson(path, data) {
+            fs.writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+          }
+
+          function nextMinor(version) {
+            const match = version.match(/^(\d+)\.(\d+)\.(\d+)$/);
+            if (!match) {
+              throw new Error(`Unsupported version format: ${version}`);
+            }
+
+            const major = Number(match[1]);
+            const minor = Number(match[2]) + 1;
+            return `${major}.${minor}.0`;
+          }
+
+          const rootPackage = readJson('package.json');
+          const nextVersion = nextMinor(rootPackage.version);
+
+          rootPackage.version = nextVersion;
+          writeJson('package.json', rootPackage);
+
+          const appPackage = readJson('app/package.json');
+          appPackage.version = nextVersion;
+          writeJson('app/package.json', appPackage);
+
+          const lockfile = readJson('package-lock.json');
+          lockfile.version = nextVersion;
+          lockfile.packages[''].version = nextVersion;
+          lockfile.packages.app.version = nextVersion;
+          writeJson('package-lock.json', lockfile);
+
+          const pyprojectPath = 'sidecar/pyproject.toml';
+          const pyproject = fs.readFileSync(pyprojectPath, 'utf8');
+          fs.writeFileSync(
+            pyprojectPath,
+            pyproject.replace(/^version = "[^"]+"/m, `version = "${nextVersion}"`),
+          );
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${nextVersion}\n`);
+          NODE
+
+      - name: Commit and push version bump
+        run: |
+          if git diff --quiet; then
+            echo "No version changes to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json app/package.json package-lock.json sidecar/pyproject.toml
+          git commit -m "Bump version to ${{ steps.bump.outputs.version }}"
+          git push
